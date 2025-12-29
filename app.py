@@ -11,117 +11,134 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better UX - LIGHT THEME for readability
+# Custom CSS - Matching Branch Auditor Extension Style
 st.markdown("""
 <style>
-    /* Main styling - Light theme */
+    /* Main styling - Clean light theme matching extension */
     .stApp {
         background: #f8fafc;
     }
     
     /* Ensure all text is dark and readable */
     .stApp, .stApp p, .stApp span, .stApp label, .stApp div {
-        color: #1e293b !important;
+        color: #334155 !important;
     }
     
-    /* Headers */
+    /* Headers - matching extension header style */
     h1, h2, h3, .stSubheader {
-        color: #0f172a !important;
-        font-weight: 700 !important;
+        color: #1e293b !important;
+        font-weight: 600 !important;
     }
     
     /* Metric values */
     [data-testid="stMetricValue"] {
-        color: #0f172a !important;
-        font-weight: 600 !important;
+        color: #1e293b !important;
+        font-weight: 700 !important;
     }
     
     [data-testid="stMetricLabel"] {
-        color: #475569 !important;
+        color: #64748b !important;
+        font-size: 10px !important;
+        text-transform: uppercase !important;
     }
     
-    /* Card styling */
+    /* Card styling - matching extension cards */
     .metric-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1.5rem;
+        border-radius: 6px;
+        padding: 1rem;
         margin: 0.5rem 0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
-    /* Low stock warning */
+    /* Low stock warning - matching extension alert style */
     .low-stock {
-        background: linear-gradient(90deg, #fef2f2, #ffffff);
-        border-left: 4px solid #ef4444;
-        padding: 0.75rem 1rem;
-        border-radius: 0 8px 8px 0;
+        background: #fee2e2;
+        border-left: 3px solid #dc2626;
+        padding: 6px 10px;
+        border-radius: 0 4px 4px 0;
         margin: 0.5rem 0;
-        color: #991b1b !important;
+        color: #dc2626 !important;
+        font-size: 10px;
+        font-weight: 500;
     }
     
-    /* Good margin indicator */
+    .low-stock strong {
+        color: #dc2626 !important;
+    }
+    
+    /* Warning style (yellow) */
+    .warning-stock {
+        background: #fef3c7;
+        border-left: 3px solid #d97706;
+        padding: 6px 10px;
+        border-radius: 0 4px 4px 0;
+        margin: 0.5rem 0;
+        color: #92400e !important;
+        font-size: 10px;
+        font-weight: 500;
+    }
+    
+    /* Margin indicators - matching extension colors */
     .good-margin {
-        color: #16a34a !important;
-        font-weight: 600;
+        color: #059669 !important;
+        font-weight: 700;
     }
     
     .medium-margin {
         color: #d97706 !important;
-        font-weight: 600;
+        font-weight: 700;
     }
     
     .low-margin {
         color: #dc2626 !important;
-        font-weight: 600;
+        font-weight: 700;
     }
     
-    /* Comparison table */
+    /* Comparison card - matching extension card style */
     .comparison-row {
         background: #ffffff;
-        border-radius: 8px;
-        padding: 1rem;
+        border-radius: 6px;
+        padding: 10px;
         margin: 0.5rem 0;
         border: 1px solid #e2e8f0;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     
     .comparison-row strong {
-        color: #0f172a !important;
+        color: #1e293b !important;
+        font-size: 12px;
     }
     
     .comparison-row span {
         color: #64748b !important;
     }
     
-    /* Stock badges */
+    /* Stock badges - matching extension status pills */
     .stock-badge {
         display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 9px;
         font-weight: 600;
+        text-transform: uppercase;
     }
     
     .stock-critical {
-        background: #fef2f2;
+        background: #fee2e2;
         color: #dc2626 !important;
-        border: 1px solid #fecaca;
     }
     
     .stock-low {
-        background: #fffbeb;
+        background: #fef3c7;
         color: #d97706 !important;
-        border: 1px solid #fde68a;
     }
     
     .stock-good {
-        background: #f0fdf4;
+        background: #dcfce7;
         color: #16a34a !important;
-        border: 1px solid #bbf7d0;
     }
     
-    /* Sidebar */
+    /* Sidebar - clean style */
     [data-testid="stSidebar"] {
         background: #ffffff;
         border-right: 1px solid #e2e8f0;
@@ -133,47 +150,96 @@ st.markdown("""
         color: #334155 !important;
     }
     
-    /* Dataframe */
+    /* Dataframe - matching extension table style */
     .stDataFrame {
         border: 1px solid #e2e8f0;
-        border-radius: 8px;
+        border-radius: 6px;
+        font-size: 12px;
     }
     
-    /* Buttons */
+    /* Primary button - matching extension indigo */
     .stButton > button {
-        background: #3b82f6;
+        background: #4f46e5;
         color: white !important;
         border: none;
-        font-weight: 500;
+        font-weight: 600;
+        font-size: 11px;
+        border-radius: 4px;
     }
     
     .stButton > button:hover {
-        background: #2563eb;
+        background: #4338ca;
     }
     
-    /* Download button */
+    /* Download button - green */
     .stDownloadButton > button {
-        background: #10b981;
+        background: #059669;
         color: white !important;
+        font-weight: 600;
+        border-radius: 4px;
     }
     
-    /* Expander */
+    .stDownloadButton > button:hover {
+        background: #047857;
+    }
+    
+    /* Expander - matching extension collapsible style */
     .streamlit-expanderHeader {
-        background: #f1f5f9;
+        background: #f8fafc;
         color: #1e293b !important;
         font-weight: 600;
+        font-size: 10px;
+        text-transform: uppercase;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
     }
     
     /* Text area */
     .stTextArea textarea {
         background: #ffffff;
-        color: #1e293b !important;
-        border: 1px solid #cbd5e1;
+        color: #334155 !important;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 11px;
     }
     
     /* Captions */
     .stCaption, small {
         color: #64748b !important;
+        font-size: 10px;
+    }
+    
+    /* KPI style badges */
+    .kpi-excellent {
+        background: #dcfce7;
+        color: #059669 !important;
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-size: 8px;
+        font-weight: 600;
+    }
+    
+    .kpi-warning {
+        background: #fef3c7;
+        color: #d97706 !important;
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-size: 8px;
+        font-weight: 600;
+    }
+    
+    .kpi-danger {
+        background: #fee2e2;
+        color: #dc2626 !important;
+        padding: 2px 6px;
+        border-radius: 8px;
+        font-size: 8px;
+        font-weight: 600;
+    }
+    
+    /* Divider */
+    hr {
+        border-color: #e2e8f0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -259,10 +325,10 @@ def get_stock_status(qty):
 
 
 def get_margin_class(margin_pct):
-    """Return CSS class based on margin percentage."""
-    if margin_pct >= 35:
+    """Return CSS class based on margin percentage (aligned with Branch Auditor thresholds)."""
+    if margin_pct >= 30:
         return "good-margin"
-    elif margin_pct >= 25:
+    elif margin_pct >= 20:
         return "medium-margin"
     else:
         return "low-margin"
@@ -495,7 +561,7 @@ if sel_slab:
             """, unsafe_allow_html=True)
         elif sq_with_waste > available_qty * 0.8:
             st.markdown(f"""
-            <div class="low-stock" style="border-left-color: #fbbf24; background: linear-gradient(90deg, #fbbf2422, transparent);">
+            <div class="warning-stock">
                 ⚡ <strong>Tight Fit!</strong> Using {sq_with_waste:.0f} sf of {available_qty:.0f} sf available.
             </div>
             """, unsafe_allow_html=True)
@@ -549,12 +615,12 @@ if sel_slab:
             
             # Margin guidance
             st.markdown("---")
-            if costs['margin_pct'] >= 35:
+            if costs['margin_pct'] >= 30:
                 st.success("✅ Great margin - standard pricing recommended")
-            elif costs['margin_pct'] >= 25:
+            elif costs['margin_pct'] >= 20:
                 st.info("📊 Acceptable margin - some negotiation room available")
             else:
-                st.warning("⚠️ Low margin - consider limiting discounts")
+                st.warning("⚠️ Below target margin (<20%) - limit discounts")
             
             st.caption(f"Available: {available_qty:.0f} sf | Using: {sq_with_waste:.0f} sf (with {(WASTE_FACTOR-1)*100:.0f}% waste)")
         
