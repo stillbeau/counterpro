@@ -11,77 +11,90 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better UX
+# Custom CSS for better UX - LIGHT THEME for readability
 st.markdown("""
 <style>
-    /* Main styling */
+    /* Main styling - Light theme */
     .stApp {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        background: #f8fafc;
+    }
+    
+    /* Ensure all text is dark and readable */
+    .stApp, .stApp p, .stApp span, .stApp label, .stApp div {
+        color: #1e293b !important;
+    }
+    
+    /* Headers */
+    h1, h2, h3, .stSubheader {
+        color: #0f172a !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Metric values */
+    [data-testid="stMetricValue"] {
+        color: #0f172a !important;
+        font-weight: 600 !important;
+    }
+    
+    [data-testid="stMetricLabel"] {
+        color: #475569 !important;
     }
     
     /* Card styling */
     .metric-card {
-        background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(255,255,255,0.1);
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
         border-radius: 12px;
         padding: 1.5rem;
         margin: 0.5rem 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     
     /* Low stock warning */
     .low-stock {
-        background: linear-gradient(90deg, #ff6b6b22, transparent);
-        border-left: 3px solid #ff6b6b;
-        padding: 0.5rem 1rem;
+        background: linear-gradient(90deg, #fef2f2, #ffffff);
+        border-left: 4px solid #ef4444;
+        padding: 0.75rem 1rem;
         border-radius: 0 8px 8px 0;
         margin: 0.5rem 0;
+        color: #991b1b !important;
     }
     
     /* Good margin indicator */
     .good-margin {
-        color: #4ade80;
+        color: #16a34a !important;
         font-weight: 600;
     }
     
     .medium-margin {
-        color: #fbbf24;
+        color: #d97706 !important;
         font-weight: 600;
     }
     
     .low-margin {
-        color: #f87171;
+        color: #dc2626 !important;
         font-weight: 600;
     }
     
     /* Comparison table */
     .comparison-row {
-        background: rgba(255,255,255,0.03);
+        background: #ffffff;
         border-radius: 8px;
         padding: 1rem;
         margin: 0.5rem 0;
-        border: 1px solid rgba(255,255,255,0.08);
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
     }
     
-    /* Copy button success */
-    .copy-success {
-        color: #4ade80;
-        font-size: 0.875rem;
+    .comparison-row strong {
+        color: #0f172a !important;
     }
     
-    /* Header styling */
-    h1 {
-        background: linear-gradient(90deg, #f8fafc, #94a3b8);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 700 !important;
+    .comparison-row span {
+        color: #64748b !important;
     }
     
-    /* Sidebar styling */
-    .css-1d391kg {
-        background: rgba(0,0,0,0.2);
-    }
-    
-    /* Stock badge */
+    /* Stock badges */
     .stock-badge {
         display: inline-block;
         padding: 0.25rem 0.75rem;
@@ -91,21 +104,76 @@ st.markdown("""
     }
     
     .stock-critical {
-        background: #dc262622;
-        color: #fca5a5;
-        border: 1px solid #dc2626;
+        background: #fef2f2;
+        color: #dc2626 !important;
+        border: 1px solid #fecaca;
     }
     
     .stock-low {
-        background: #f5920022;
-        color: #fcd34d;
-        border: 1px solid #f59200;
+        background: #fffbeb;
+        color: #d97706 !important;
+        border: 1px solid #fde68a;
     }
     
     .stock-good {
-        background: #16a34a22;
-        color: #86efac;
-        border: 1px solid #16a34a;
+        background: #f0fdf4;
+        color: #16a34a !important;
+        border: 1px solid #bbf7d0;
+    }
+    
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background: #ffffff;
+        border-right: 1px solid #e2e8f0;
+    }
+    
+    [data-testid="stSidebar"] label, 
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] p {
+        color: #334155 !important;
+    }
+    
+    /* Dataframe */
+    .stDataFrame {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+    }
+    
+    /* Buttons */
+    .stButton > button {
+        background: #3b82f6;
+        color: white !important;
+        border: none;
+        font-weight: 500;
+    }
+    
+    .stButton > button:hover {
+        background: #2563eb;
+    }
+    
+    /* Download button */
+    .stDownloadButton > button {
+        background: #10b981;
+        color: white !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: #f1f5f9;
+        color: #1e293b !important;
+        font-weight: 600;
+    }
+    
+    /* Text area */
+    .stTextArea textarea {
+        background: #ffffff;
+        color: #1e293b !important;
+        border: 1px solid #cbd5e1;
+    }
+    
+    /* Captions */
+    .stCaption, small {
+        color: #64748b !important;
     }
 </style>
 """, unsafe_allow_html=True)
