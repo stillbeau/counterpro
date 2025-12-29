@@ -2,7 +2,8 @@
 def load_and_clean_data(uploaded_file):
     # 1. Determine File Type & Load
     try:
-        if uploaded_file.name.endswith('.csv'):
+        # Check file extension
+        if uploaded_file.name.lower().endswith('.csv'):
             try:
                 df = pd.read_csv(uploaded_file)
             except UnicodeDecodeError:
@@ -22,9 +23,8 @@ def load_and_clean_data(uploaded_file):
     # 2. Normalize Columns
     df.columns = df.columns.str.strip()
     
-    # Verify critical columns exist
+    # Verify critical columns exist (Fuzzy match)
     if 'Product Variant' not in df.columns:
-        # Try to find a column that looks like it (fuzzy match)
         for c in df.columns:
             if isinstance(c, str) and 'Product Variant' in c:
                 df.rename(columns={c: 'Product Variant'}, inplace=True)
@@ -38,7 +38,6 @@ def load_and_clean_data(uploaded_file):
     
     # 4. Clean Numbers (Handle currency symbols if present)
     for col in ['On Hand Qty', 'Serialized On Hand Cost']:
-        # Find the actual column name in the file (it might have extra spaces)
         found_col = [c for c in df.columns if col in c]
         if found_col:
             actual_col_name = found_col[0]
@@ -51,7 +50,6 @@ def load_and_clean_data(uploaded_file):
             df.rename(columns={actual_col_name: col}, inplace=True)
 
     # 5. Final Filtering & Calc
-    # Ensure columns exist before filtering
     if 'On Hand Qty' in df.columns and 'Serialized On Hand Cost' in df.columns:
         df = df[df['On Hand Qty'] > 0] # Remove zero qty
         df['Unit_Cost_Internal'] = df['Serialized On Hand Cost'] / df['On Hand Qty']
