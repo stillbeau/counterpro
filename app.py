@@ -753,6 +753,20 @@ if sel_slab and sel_slab != "No materials available for this size" and len(slab_
     sq_with_waste = req_sqft * WASTE_FACTOR
 
     with col2:
+        # Availability Warning
+        if sq_with_waste > available_qty:
+            st.markdown(f"""
+            <div class="low-stock">
+                ⚠️ <strong>Insufficient Stock!</strong> Need {sq_with_waste:.0f} sf (with waste), only {available_qty:.0f} sf available.
+            </div>
+            """, unsafe_allow_html=True)
+        elif sq_with_waste > available_qty * 0.8:
+            st.markdown(f"""
+            <div class="warning-stock">
+                ⚡ <strong>Tight Fit!</strong> Using {sq_with_waste:.0f} sf of {available_qty:.0f} sf available ({row['Slab_Count']} slabs).
+            </div>
+            """, unsafe_allow_html=True)
+
         # Main pricing metrics
         pm1, pm2, pm3 = st.columns(3)
         pm1.metric("Material", f"${costs['material_total']:,.2f}")
