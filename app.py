@@ -427,40 +427,59 @@ def group_slabs_by_material(df):
     if df.empty:
         return pd.DataFrame()
 
-    # Group by material
-    grouped_data = []
-    for (brand, color, thickness), group in df.groupby(['Brand', 'Color', 'Thickness']):
-        # Calculate total quantity and average unit cost
-        total_qty = group['On Hand Qty'].sum()
-        avg_unit_cost = group['Unit_Cost_Internal'].mean()
+    # Ensure numeric type for accurate summing
+    df = df.copy()
+    df['On Hand Qty'] = pd.to_numeric(df['On Hand Qty'], errors='coerce').fillna(0)
 
-        # Collect serial numbers/product variants
-        serial_numbers = []
-        slab_details = []
-        for _, row in group.iterrows():
-            if 'Product Variant' in row.index and pd.notna(row['Product Variant']):
-                serial_numbers.append(str(row['Product Variant']))
-            slab_details.append({
-                'qty': row['On Hand Qty'],
-                'variant': row.get('Product Variant', 'N/A')
-            })
+    # Check if we have a Serial Number column, otherwise use Product Variant
+    serial_col = None
+    if 'Serial Number' in df.columns:
+        serial_col = 'Serial Number'
+    elif 'Product Variant' in df.columns:
+        serial_col = 'Product Variant'
 
-        # Create full name
-        full_name = f"{brand} {color} ({thickness})"
+    # Group and aggregate
+    agg_dict = {
+        'On Hand Qty': 'sum',
+        'Unit_Cost_Internal': 'mean',
+    }
 
-        grouped_data.append({
-            'Brand': brand,
-            'Color': color,
-            'Thickness': thickness,
-            'Full_Name': full_name,
-            'On Hand Qty': total_qty,
-            'Unit_Cost_Internal': avg_unit_cost,
-            'Slab_Count': len(group),
-            'Serial_Numbers': serial_numbers,
-            'Slab_Details': slab_details
+    if serial_col:
+        agg_dict['Slab_Count'] = (serial_col, 'nunique')
+        agg_dict['Serial_Numbers'] = (serial_col, lambda x: list(sorted(x.astype(str).unique())))
+    else:
+        agg_dict['Slab_Count'] = ('Full_Name', 'count')
+        agg_dict['Serial_Numbers'] = ('Full_Name', lambda x: [])
+
+    df_grouped = df.groupby(['Brand', 'Color', 'Thickness']).agg(agg_dict).reset_index()
+
+    # Create full name
+    df_grouped['Full_Name'] = df_grouped['Brand'] + " " + df_grouped['Color'] + " (" + df_grouped['Thickness'] + ")"
+
+    # Create detailed slab list for tracking
+    df_grouped['Slab_Details'] = df_grouped.apply(
+        lambda row: _get_slab_details(df, row['Brand'], row['Color'], row['Thickness'], serial_col),
+        axis=1
+    )
+
+    return df_grouped
+
+
+def _get_slab_details(df, brand, color, thickness, serial_col):
+    """Helper to get detailed slab information for a material group."""
+    mask = (df['Brand'] == brand) & (df['Color'] == color) & (df['Thickness'] == thickness)
+    group_df = df[mask]
+
+    details = []
+    for _, row in group_df.iterrows():
+        variant = str(row.get(serial_col, 'N/A')) if serial_col else 'N/A'
+        details.append({
+            'qty': float(row['On Hand Qty']),
+            'variant': variant
         })
 
-    return pd.DataFrame(grouped_data)
+    # Sort by quantity descending (use largest slabs first)
+    return sorted(details, key=lambda x: x['qty'], reverse=True)
 
 
 # --- 2. DATA PROCESSING ---
