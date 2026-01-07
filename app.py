@@ -150,11 +150,35 @@ st.markdown("""
         color: #334155 !important;
     }
     
-    /* Dataframe - matching extension table style */
+    /* Dataframe - improved table style */
     .stDataFrame {
         border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        font-size: 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        overflow: hidden;
+    }
+
+    /* Table header styling */
+    .stDataFrame thead tr th {
+        background: #f8fafc !important;
+        color: #475569 !important;
+        font-weight: 600 !important;
+        font-size: 0.8rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.75rem !important;
+        border-bottom: 2px solid #e2e8f0 !important;
+    }
+
+    /* Table body styling */
+    .stDataFrame tbody tr td {
+        padding: 0.75rem !important;
+        color: #334155 !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+
+    .stDataFrame tbody tr:hover {
+        background: #f8fafc !important;
     }
     
     /* Primary button - matching extension indigo */
@@ -418,13 +442,29 @@ def fetch_all_data():
 
 
 # --- 3. APP INTERFACE ---
-st.title("🧱 Dead Stock Sales Tool")
-st.caption("Clearance inventory quoting system with margin visibility")
+# Improved header with better layout
+header_col1, header_col2 = st.columns([3, 1])
+with header_col1:
+    st.markdown("""
+    <div style="padding: 1rem 0;">
+        <h1 style="margin: 0; padding: 0; font-size: 2rem; font-weight: 700; color: #1e293b;">
+            🧱 Dead Stock Sales Tool
+        </h1>
+        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem;">
+            Clearance inventory quoting system with margin visibility
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+with header_col2:
+    # Moved buttons to header
+    pass
 
-# Header actions
-col_refresh, col_export, col_spacer = st.columns([1, 1, 4])
+# Action buttons in a cleaner layout
+st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
+col_refresh, col_export, col_spacer = st.columns([1.2, 1.2, 3.6])
+
 with col_refresh:
-    if st.button("🔄 Refresh Data", use_container_width=True):
+    if st.button("🔄 Refresh Data", use_container_width=True, type="primary"):
         st.cache_data.clear()
         st.rerun()
 
@@ -446,7 +486,13 @@ with col_export:
     )
 
 # --- SIDEBAR FILTERS ---
-st.sidebar.header("🔍 Filter Inventory")
+st.sidebar.markdown("""
+<div style="padding: 0.5rem 0 1rem 0;">
+    <h2 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #1e293b;">
+        🔍 Filter Inventory
+    </h2>
+</div>
+""", unsafe_allow_html=True)
 
 # Thickness Filter
 thicks = ["All"] + sorted(df['Thickness'].dropna().unique().tolist())
@@ -481,17 +527,53 @@ if search:
     df_filt = df_filt[df_filt['Full_Name'].str.contains(search, case=False, na=False)]
 
 # --- INVENTORY TABLE ---
-st.markdown("---")
-st.subheader("📦 Available Inventory")
+st.markdown("<div style='margin: 2rem 0 1rem 0;'></div>", unsafe_allow_html=True)
+st.markdown("""
+<div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem;">
+    <h2 style="margin: 0 0 1rem 0; font-size: 1.25rem; font-weight: 600; color: #1e293b;">
+        📦 Available Inventory
+    </h2>
+</div>
+""", unsafe_allow_html=True)
 
-# Summary metrics
+# Summary metrics with improved styling
+st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
 m1, m2, m3, m4 = st.columns(4)
-m1.metric("Total Slabs", len(df_filt))
-m2.metric("🔴 Critical", len(df_filt[df_filt['Stock_Status'] == 'critical']))
-m3.metric("🟡 Low Stock", len(df_filt[df_filt['Stock_Status'] == 'low']))
-m4.metric("Total Sq Ft", f"{df_filt['On Hand Qty'].sum():,.0f}")
+with m1:
+    st.markdown(f"""
+    <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">TOTAL SLABS</div>
+        <div style="color: #1e293b; font-size: 1.75rem; font-weight: 700;">{len(df_filt)}</div>
+    </div>
+    """, unsafe_allow_html=True)
+with m2:
+    critical_count = len(df_filt[df_filt['Stock_Status'] == 'critical'])
+    st.markdown(f"""
+    <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">CRITICAL</div>
+        <div style="color: #dc2626; font-size: 1.75rem; font-weight: 700;">{critical_count}</div>
+    </div>
+    """, unsafe_allow_html=True)
+with m3:
+    low_count = len(df_filt[df_filt['Stock_Status'] == 'low'])
+    st.markdown(f"""
+    <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">LOW STOCK</div>
+        <div style="color: #d97706; font-size: 1.75rem; font-weight: 700;">{low_count}</div>
+    </div>
+    """, unsafe_allow_html=True)
+with m4:
+    total_sqft = df_filt['On Hand Qty'].sum()
+    st.markdown(f"""
+    <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">TOTAL SQ FT</div>
+        <div style="color: #1e293b; font-size: 1.75rem; font-weight: 700;">{total_sqft:,.0f}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Format dataframe for display
+# Format dataframe for display with improved styling
+st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
+
 if len(df_filt) > 0:
     display_df = df_filt[['Full_Name', 'On Hand Qty', 'Unit_Cost_Internal', 'Stock_Status']].copy()
     display_df['Stock'] = display_df['Stock_Status'].map({
@@ -501,20 +583,30 @@ if len(df_filt) > 0:
     })
     display_df['Unit Cost'] = display_df['Unit_Cost_Internal'].apply(lambda x: f"${x:,.2f}/sf")
     display_df['Qty (sf)'] = display_df['On Hand Qty'].apply(lambda x: f"{x:,.0f}")
-    
+
     st.dataframe(
         display_df[['Full_Name', 'Qty (sf)', 'Unit Cost', 'Stock']].rename(columns={'Full_Name': 'Material'}),
         use_container_width=True,
-        height=300,
+        height=400,
         hide_index=True
     )
 else:
-    st.warning("No slabs match your filters. Try adjusting your search criteria.")
+    st.markdown("""
+    <div style="background: #fef3c7; padding: 1rem; border-radius: 6px; border-left: 3px solid #d97706; margin: 1.5rem 0;">
+        <span style="color: #92400e;">⚠️ No slabs match your filters. Try adjusting your search criteria.</span>
+    </div>
+    """, unsafe_allow_html=True)
     st.stop()
 
 # --- QUOTE CALCULATOR ---
-st.markdown("---")
-st.subheader("💰 Quote Calculator")
+st.markdown("<div style='margin: 2.5rem 0 1.5rem 0;'></div>", unsafe_allow_html=True)
+st.markdown("""
+<div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem;">
+    <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: #1e293b;">
+        💰 Quote Calculator
+    </h2>
+</div>
+""", unsafe_allow_html=True)
 
 # Initialize comparison list in session state
 if 'comparison_slabs' not in st.session_state:
@@ -655,8 +747,14 @@ Best regards"""
 
 # --- COMPARISON TABLE ---
 if st.session_state.comparison_slabs:
-    st.markdown("---")
-    st.subheader("📊 Slab Comparison")
+    st.markdown("<div style='margin: 2.5rem 0 1.5rem 0;'></div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem;">
+        <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: #1e293b;">
+            📊 Slab Comparison
+        </h2>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Clear comparison button
     if st.button("🗑️ Clear Comparison"):
@@ -691,5 +789,9 @@ if st.session_state.comparison_slabs:
                     st.rerun()
 
 # --- FOOTER ---
-st.markdown("---")
-st.caption(f"Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M')} | Data auto-refreshes every 10 minutes")
+st.markdown("<div style='margin: 3rem 0 1rem 0;'></div>", unsafe_allow_html=True)
+st.markdown(f"""
+<div style="text-align: center; padding: 1.5rem; color: #94a3b8; font-size: 0.875rem; border-top: 1px solid #e2e8f0;">
+    Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M')} | Data auto-refreshes every 10 minutes
+</div>
+""", unsafe_allow_html=True)
