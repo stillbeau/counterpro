@@ -232,11 +232,17 @@ st.markdown("""
     .stDataFrame tbody tr td {
         padding: 0.75rem !important;
         color: #334155 !important;
+        background: #ffffff !important;
         border-bottom: 1px solid #f1f5f9 !important;
     }
 
     .stDataFrame tbody tr:hover {
         background: #f8fafc !important;
+    }
+
+    /* Remove any dark backgrounds from dataframe */
+    .stDataFrame, .stDataFrame > div {
+        background: #ffffff !important;
     }
     
     /* Primary button - matching extension indigo */
@@ -570,14 +576,6 @@ sel_brand = st.sidebar.selectbox(
     help="Filter by material brand"
 )
 
-# Stock Status Filter
-st.sidebar.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-stock_filter = st.sidebar.selectbox(
-    "📊 Stock Level",
-    ["All", "🔴 Critical Only", "🟡 Low Stock", "🟢 Good Stock"],
-    help="Filter by stock availability"
-)
-
 # Text Search
 st.sidebar.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
 search = st.sidebar.text_input(
@@ -592,12 +590,6 @@ if sel_thick != "All":
     df_filt = df_filt[df_filt['Thickness'] == sel_thick]
 if sel_brand != "All":
     df_filt = df_filt[df_filt['Brand'] == sel_brand]
-if stock_filter == "🔴 Critical Only":
-    df_filt = df_filt[df_filt['Stock_Status'] == 'critical']
-elif stock_filter == "🟡 Low Stock":
-    df_filt = df_filt[df_filt['Stock_Status'] == 'low']
-elif stock_filter == "🟢 Good Stock":
-    df_filt = df_filt[df_filt['Stock_Status'] == 'good']
 if search:
     df_filt = df_filt[df_filt['Full_Name'].str.contains(search, case=False, na=False)]
 
@@ -613,7 +605,7 @@ st.markdown("""
 
 # Summary metrics with improved styling
 st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
-m1, m2, m3, m4 = st.columns(4)
+m1, m2 = st.columns(2)
 with m1:
     st.markdown(f"""
     <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
@@ -622,22 +614,6 @@ with m1:
     </div>
     """, unsafe_allow_html=True)
 with m2:
-    critical_count = len(df_filt[df_filt['Stock_Status'] == 'critical'])
-    st.markdown(f"""
-    <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
-        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">CRITICAL</div>
-        <div style="color: #dc2626; font-size: 1.75rem; font-weight: 700;">{critical_count}</div>
-    </div>
-    """, unsafe_allow_html=True)
-with m3:
-    low_count = len(df_filt[df_filt['Stock_Status'] == 'low'])
-    st.markdown(f"""
-    <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
-        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">LOW STOCK</div>
-        <div style="color: #d97706; font-size: 1.75rem; font-weight: 700;">{low_count}</div>
-    </div>
-    """, unsafe_allow_html=True)
-with m4:
     total_sqft = df_filt['On Hand Qty'].sum()
     st.markdown(f"""
     <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
@@ -650,17 +626,12 @@ with m4:
 st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
 
 if len(df_filt) > 0:
-    display_df = df_filt[['Full_Name', 'On Hand Qty', 'Unit_Cost_Internal', 'Stock_Status']].copy()
-    display_df['Stock'] = display_df['Stock_Status'].map({
-        'critical': '🔴 Critical',
-        'low': '🟡 Low',
-        'good': '🟢 Good'
-    })
+    display_df = df_filt[['Full_Name', 'On Hand Qty', 'Unit_Cost_Internal']].copy()
     display_df['Unit Cost'] = display_df['Unit_Cost_Internal'].apply(lambda x: f"${x:,.2f}/sf")
     display_df['Qty (sf)'] = display_df['On Hand Qty'].apply(lambda x: f"{x:,.0f}")
 
     st.dataframe(
-        display_df[['Full_Name', 'Qty (sf)', 'Unit Cost', 'Stock']].rename(columns={'Full_Name': 'Material'}),
+        display_df[['Full_Name', 'Qty (sf)', 'Unit Cost']].rename(columns={'Full_Name': 'Material'}),
         use_container_width=True,
         height=400,
         hide_index=True
@@ -713,26 +684,12 @@ with col1:
 if sel_slab:
     row = df_filt[df_filt['Full_Name'] == sel_slab].iloc[0]
     costs = calculate_cost(row['Unit_Cost_Internal'], req_sqft)
-    
+
     # Stock availability check
     available_qty = row['On Hand Qty']
     sq_with_waste = req_sqft * WASTE_FACTOR
-    
+
     with col2:
-        # Availability Warning
-        if sq_with_waste > available_qty:
-            st.markdown(f"""
-            <div class="low-stock">
-                ⚠️ <strong>Insufficient Stock!</strong> Need {sq_with_waste:.0f} sf (with waste), only {available_qty:.0f} sf available.
-            </div>
-            """, unsafe_allow_html=True)
-        elif sq_with_waste > available_qty * 0.8:
-            st.markdown(f"""
-            <div class="warning-stock">
-                ⚡ <strong>Tight Fit!</strong> Using {sq_with_waste:.0f} sf of {available_qty:.0f} sf available.
-            </div>
-            """, unsafe_allow_html=True)
-        
         # Main pricing metrics
         pm1, pm2, pm3 = st.columns(3)
         pm1.metric("Material", f"${costs['material_total']:,.2f}")
@@ -844,21 +801,19 @@ if st.session_state.comparison_slabs:
             slab_costs = calculate_cost(slab_row['Unit_Cost_Internal'], req_sqft)
             slab_total = slab_costs['subtotal_after_discount'] * (1 + TAX_RATE)
             margin_class = get_margin_class(slab_costs['margin_pct'])
-            stock_status, stock_label, stock_class = get_stock_status(slab_row['On Hand Qty'])
-            
+
             with comp_cols[idx]:
                 st.markdown(f"""
                 <div class="comparison-row">
                     <strong>{slab_row['Brand']}</strong><br>
-                    <span style="color: #9ca3af; font-size: 0.875rem;">{slab_row['Color']}</span><br>
-                    <span class="{stock_class}" style="margin-top: 0.5rem; display: inline-block;">{stock_label}</span>
+                    <span style="color: #9ca3af; font-size: 0.875rem;">{slab_row['Color']}</span>
                 </div>
                 """, unsafe_allow_html=True)
-                
+
                 st.metric("Total Price", f"${slab_total:,.2f}")
                 st.markdown(f"<span class='{margin_class}'>Margin: {slab_costs['margin_pct']:.1f}%</span>", unsafe_allow_html=True)
                 st.caption(f"Available: {slab_row['On Hand Qty']:.0f} sf")
-                
+
                 if st.button("❌ Remove", key=f"remove_{idx}"):
                     st.session_state.comparison_slabs.remove(slab_name)
                     st.rerun()
