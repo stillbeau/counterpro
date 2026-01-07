@@ -422,6 +422,66 @@ def get_margin_class(margin_pct):
         return "low-margin"
 
 
+def group_slabs_by_material(df):
+    """Group slabs by Brand + Color + Thickness and aggregate quantities."""
+    if df.empty:
+        return pd.DataFrame()
+
+    # Ensure numeric type for accurate summing
+    df = df.copy()
+    df['On Hand Qty'] = pd.to_numeric(df['On Hand Qty'], errors='coerce').fillna(0)
+
+    # Check if we have a Serial Number column, otherwise use Product Variant
+    serial_col = None
+    if 'Serial Number' in df.columns:
+        serial_col = 'Serial Number'
+    elif 'Product Variant' in df.columns:
+        serial_col = 'Product Variant'
+
+    # Group and aggregate
+    agg_dict = {
+        'On Hand Qty': 'sum',
+        'Unit_Cost_Internal': 'mean',
+    }
+
+    if serial_col:
+        agg_dict['Slab_Count'] = (serial_col, 'nunique')
+        agg_dict['Serial_Numbers'] = (serial_col, lambda x: list(sorted(x.astype(str).unique())))
+    else:
+        agg_dict['Slab_Count'] = ('Full_Name', 'count')
+        agg_dict['Serial_Numbers'] = ('Full_Name', lambda x: [])
+
+    df_grouped = df.groupby(['Brand', 'Color', 'Thickness']).agg(agg_dict).reset_index()
+
+    # Create full name
+    df_grouped['Full_Name'] = df_grouped['Brand'] + " " + df_grouped['Color'] + " (" + df_grouped['Thickness'] + ")"
+
+    # Create detailed slab list for tracking
+    df_grouped['Slab_Details'] = df_grouped.apply(
+        lambda row: _get_slab_details(df, row['Brand'], row['Color'], row['Thickness'], serial_col),
+        axis=1
+    )
+
+    return df_grouped
+
+
+def _get_slab_details(df, brand, color, thickness, serial_col):
+    """Helper to get detailed slab information for a material group."""
+    mask = (df['Brand'] == brand) & (df['Color'] == color) & (df['Thickness'] == thickness)
+    group_df = df[mask]
+
+    details = []
+    for _, row in group_df.iterrows():
+        variant = str(row.get(serial_col, 'N/A')) if serial_col else 'N/A'
+        details.append({
+            'qty': float(row['On Hand Qty']),
+            'variant': variant
+        })
+
+    # Sort by quantity descending (use largest slabs first)
+    return sorted(details, key=lambda x: x['qty'], reverse=True)
+
+
 # --- 2. DATA PROCESSING ---
 def parse_product_variant(variant_str):
     """Parse product variant string to extract brand, color, and thickness."""
@@ -593,6 +653,9 @@ if sel_brand != "All":
 if search:
     df_filt = df_filt[df_filt['Full_Name'].str.contains(search, case=False, na=False)]
 
+# Group slabs by material (Brand + Color + Thickness)
+df_grouped = group_slabs_by_material(df_filt)
+
 # --- INVENTORY TABLE ---
 st.markdown("<div style='margin: 2rem 0 1rem 0;'></div>", unsafe_allow_html=True)
 st.markdown("""
@@ -605,16 +668,24 @@ st.markdown("""
 
 # Summary metrics with improved styling
 st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
-m1, m2 = st.columns(2)
+m1, m2, m3 = st.columns(3)
 with m1:
     st.markdown(f"""
     <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
-        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">TOTAL SLABS</div>
-        <div style="color: #1e293b; font-size: 1.75rem; font-weight: 700;">{len(df_filt)}</div>
+        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">MATERIALS</div>
+        <div style="color: #1e293b; font-size: 1.75rem; font-weight: 700;">{len(df_grouped)}</div>
     </div>
     """, unsafe_allow_html=True)
 with m2:
-    total_sqft = df_filt['On Hand Qty'].sum()
+    total_physical_slabs = df_grouped['Slab_Count'].sum() if not df_grouped.empty else 0
+    st.markdown(f"""
+    <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">PHYSICAL SLABS</div>
+        <div style="color: #1e293b; font-size: 1.75rem; font-weight: 700;">{total_physical_slabs}</div>
+    </div>
+    """, unsafe_allow_html=True)
+with m3:
+    total_sqft = df_grouped['On Hand Qty'].sum() if not df_grouped.empty else 0
     st.markdown(f"""
     <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #e2e8f0;">
         <div style="color: #64748b; font-size: 0.75rem; text-transform: uppercase; margin-bottom: 0.25rem;">TOTAL SQ FT</div>
@@ -625,13 +696,14 @@ with m2:
 # Format dataframe for display with improved styling
 st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
 
-if len(df_filt) > 0:
-    display_df = df_filt[['Full_Name', 'On Hand Qty', 'Unit_Cost_Internal']].copy()
+if len(df_grouped) > 0:
+    display_df = df_grouped[['Full_Name', 'Slab_Count', 'On Hand Qty', 'Unit_Cost_Internal']].copy()
     display_df['Unit Cost'] = display_df['Unit_Cost_Internal'].apply(lambda x: f"${x:,.2f}/sf")
     display_df['Qty (sf)'] = display_df['On Hand Qty'].apply(lambda x: f"{x:,.0f}")
+    display_df['Slabs'] = display_df['Slab_Count'].apply(lambda x: f"{x}")
 
     st.dataframe(
-        display_df[['Full_Name', 'Qty (sf)', 'Unit Cost']].rename(columns={'Full_Name': 'Material'}),
+        display_df[['Full_Name', 'Slabs', 'Qty (sf)', 'Unit Cost']].rename(columns={'Full_Name': 'Material'}),
         use_container_width=True,
         height=400,
         hide_index=True
@@ -662,27 +734,37 @@ col1, col2 = st.columns([1, 2])
 
 with col1:
     req_sqft = st.number_input(
-        "Project Sq Ft (Finished)", 
-        min_value=1.0, 
-        value=35.0, 
+        "Project Sq Ft (Finished)",
+        min_value=1.0,
+        value=35.0,
         step=5.0,
         help="Enter the finished square footage needed"
     )
-    
-    slab_options = df_filt['Full_Name'].unique().tolist()
-    sel_slab = st.selectbox("Select Slab to Quote", slab_options)
+
+    # Filter materials to only show those with enough combined material (including waste factor)
+    sq_with_waste_needed = req_sqft * WASTE_FACTOR
+    df_adequate = df_grouped[df_grouped['On Hand Qty'] >= sq_with_waste_needed].copy() if not df_grouped.empty else pd.DataFrame()
+    slab_options = df_adequate['Full_Name'].unique().tolist() if not df_adequate.empty else []
+
+    # Show availability info
+    total_materials = len(df_grouped)
+    adequate_materials = len(slab_options)
+    if adequate_materials < total_materials:
+        st.caption(f"ℹ️ {adequate_materials} of {total_materials} materials have sufficient quantity ({sq_with_waste_needed:.0f} sf needed with waste)")
+
+    sel_slab = st.selectbox("Select Material to Quote", slab_options if slab_options else ["No materials available for this size"])
     
     # Add to comparison button
     if st.button("➕ Add to Comparison", use_container_width=True):
-        if sel_slab and sel_slab not in st.session_state.comparison_slabs:
+        if sel_slab and sel_slab != "No materials available for this size" and sel_slab not in st.session_state.comparison_slabs:
             if len(st.session_state.comparison_slabs) < 4:
                 st.session_state.comparison_slabs.append(sel_slab)
                 st.success(f"Added {sel_slab[:30]}...")
             else:
                 st.warning("Max 4 slabs for comparison")
 
-if sel_slab:
-    row = df_filt[df_filt['Full_Name'] == sel_slab].iloc[0]
+if sel_slab and sel_slab != "No materials available for this size" and len(slab_options) > 0:
+    row = df_adequate[df_adequate['Full_Name'] == sel_slab].iloc[0]
     costs = calculate_cost(row['Unit_Cost_Internal'], req_sqft)
 
     # Stock availability check
@@ -690,6 +772,20 @@ if sel_slab:
     sq_with_waste = req_sqft * WASTE_FACTOR
 
     with col2:
+        # Availability Warning
+        if sq_with_waste > available_qty:
+            st.markdown(f"""
+            <div class="low-stock">
+                ⚠️ <strong>Insufficient Stock!</strong> Need {sq_with_waste:.0f} sf (with waste), only {available_qty:.0f} sf available.
+            </div>
+            """, unsafe_allow_html=True)
+        elif sq_with_waste > available_qty * 0.8:
+            st.markdown(f"""
+            <div class="warning-stock">
+                ⚡ <strong>Tight Fit!</strong> Using {sq_with_waste:.0f} sf of {available_qty:.0f} sf available ({row['Slab_Count']} slabs).
+            </div>
+            """, unsafe_allow_html=True)
+
         # Main pricing metrics
         pm1, pm2, pm3 = st.columns(3)
         pm1.metric("Material", f"${costs['material_total']:,.2f}")
@@ -725,16 +821,32 @@ if sel_slab:
             with mat_col3:
                 st.markdown(f"**Thickness:** {row['Thickness']}")
 
-            # Display Product Variant (contains serial/item info)
-            if 'Product Variant' in row.index and pd.notna(row['Product Variant']):
-                st.caption(f"Product Variant: {row['Product Variant']}")
+            st.markdown("---")
 
-            # Display any serial number columns if they exist
-            serial_cols = [col for col in row.index if 'serial' in col.lower() or 'sku' in col.lower() or 'item' in col.lower()]
-            if serial_cols:
-                serial_info = " | ".join([f"{col}: {row[col]}" for col in serial_cols if pd.notna(row[col])])
-                if serial_info:
-                    st.caption(f"🔖 {serial_info}")
+            # Calculate how many slabs needed for the job
+            slab_details = row['Slab_Details']
+            slabs_needed = []
+            remaining_needed = sq_with_waste
+
+            for detail in slab_details:
+                if remaining_needed <= 0:
+                    break
+                slabs_needed.append(detail)
+                remaining_needed -= detail['qty']
+
+            # Display slabs needed for this job
+            st.markdown(f"**🔢 Slabs Required for Job:** {len(slabs_needed)} of {len(slab_details)} available")
+            st.caption(f"Project needs {sq_with_waste:.0f} sf (with waste) | {available_qty:.0f} sf total available")
+
+            st.markdown("**📦 Slab Serial Numbers Used:**")
+            for idx, slab in enumerate(slabs_needed, 1):
+                st.caption(f"{idx}. {slab['variant']} - {slab['qty']:.0f} sf")
+
+            # Show remaining slabs if not all used
+            if len(slabs_needed) < len(slab_details):
+                with st.expander(f"View {len(slab_details) - len(slabs_needed)} additional slab(s) not needed"):
+                    for idx, slab in enumerate(slab_details[len(slabs_needed):], len(slabs_needed) + 1):
+                        st.caption(f"{idx}. {slab['variant']} - {slab['qty']:.0f} sf")
 
             st.markdown("---")
 
@@ -799,6 +911,14 @@ Best regards"""
         if st.button("📋 Copy to Clipboard", use_container_width=True):
             st.code(email_body, language=None)
             st.success("✅ Email copied! Use Ctrl+C to copy from the box above.")
+else:
+    with col2:
+        st.markdown("""
+        <div style="background: #fef3c7; padding: 1.5rem; border-radius: 6px; border-left: 3px solid #d97706; margin: 1.5rem 0;">
+            <span style="color: #92400e;">⚠️ <strong>No materials available for this project size.</strong><br>
+            Try reducing the project square footage or check if you need to order new material.</span>
+        </div>
+        """, unsafe_allow_html=True)
 
 # --- COMPARISON TABLE ---
 if st.session_state.comparison_slabs:
@@ -817,10 +937,10 @@ if st.session_state.comparison_slabs:
         st.rerun()
     
     comp_cols = st.columns(len(st.session_state.comparison_slabs))
-    
+
     for idx, slab_name in enumerate(st.session_state.comparison_slabs):
-        if slab_name in df_filt['Full_Name'].values:
-            slab_row = df_filt[df_filt['Full_Name'] == slab_name].iloc[0]
+        if slab_name in df_grouped['Full_Name'].values:
+            slab_row = df_grouped[df_grouped['Full_Name'] == slab_name].iloc[0]
             slab_costs = calculate_cost(slab_row['Unit_Cost_Internal'], req_sqft)
             slab_total = slab_costs['subtotal_after_discount'] * (1 + TAX_RATE)
             margin_class = get_margin_class(slab_costs['margin_pct'])
@@ -835,7 +955,7 @@ if st.session_state.comparison_slabs:
 
                 st.metric("Total Price", f"${slab_total:,.2f}")
                 st.markdown(f"<span class='{margin_class}'>Margin: {slab_costs['margin_pct']:.1f}%</span>", unsafe_allow_html=True)
-                st.caption(f"Available: {slab_row['On Hand Qty']:.0f} sf")
+                st.caption(f"Available: {slab_row['On Hand Qty']:.0f} sf ({slab_row['Slab_Count']} slabs)")
 
                 if st.button("❌ Remove", key=f"remove_{idx}"):
                     st.session_state.comparison_slabs.remove(slab_name)
