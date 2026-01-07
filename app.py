@@ -714,11 +714,34 @@ if sel_slab:
         # --- MARGIN VISIBILITY (Internal) ---
         with st.expander("🔐 Sales Team: Margin & Cost Analysis", expanded=False):
             margin_class = get_margin_class(costs['margin_pct'])
-            
+
+            # Material Details Section
+            st.markdown("**📋 Material Details:**")
+            mat_col1, mat_col2, mat_col3 = st.columns(3)
+            with mat_col1:
+                st.markdown(f"**Brand:** {row['Brand']}")
+            with mat_col2:
+                st.markdown(f"**Color:** {row['Color']}")
+            with mat_col3:
+                st.markdown(f"**Thickness:** {row['Thickness']}")
+
+            # Display Product Variant (contains serial/item info)
+            if 'Product Variant' in row.index and pd.notna(row['Product Variant']):
+                st.caption(f"Product Variant: {row['Product Variant']}")
+
+            # Display any serial number columns if they exist
+            serial_cols = [col for col in row.index if 'serial' in col.lower() or 'sku' in col.lower() or 'item' in col.lower()]
+            if serial_cols:
+                serial_info = " | ".join([f"{col}: {row[col]}" for col in serial_cols if pd.notna(row[col])])
+                if serial_info:
+                    st.caption(f"🔖 {serial_info}")
+
+            st.markdown("---")
+
             ic1, ic2, ic3 = st.columns(3)
             ic1.metric("IB Transfer Cost", f"${costs['ib_transfer_cost']:,.2f}")
             ic2.metric("Gross Profit", f"${costs['gross_profit']:,.2f}")
-            
+
             # Color-coded margin
             ic3.markdown(f"""
             <div style="text-align: center;">
@@ -726,9 +749,9 @@ if sel_slab:
                 <span class="{margin_class}" style="font-size: 1.5rem;">{costs['margin_pct']:.1f}%</span>
             </div>
             """, unsafe_allow_html=True)
-            
+
             st.markdown("---")
-            
+
             # Detailed breakdown
             st.markdown("**Cost Breakdown:**")
             breakdown_cols = st.columns(4)
