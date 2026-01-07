@@ -339,11 +339,11 @@ DATA_SOURCES = [
 ]
 
 # PRICING CONSTANTS
-MARKUP_FACTOR = 1.51
-INSTALL_COST_PER_SQFT = 21.0
-FABRICATION_COST_PER_SQFT = 17.0
+MARKUP_FACTOR = 1.10
+INSTALL_COST_PER_SQFT = 19.0
+FABRICATION_COST_PER_SQFT = 16.0
 IB_MATERIAL_MARKUP = 1.05
-WASTE_FACTOR = 1.05
+WASTE_FACTOR = 1.20
 TAX_RATE = 0.05
 
 # STOCK THRESHOLDS
@@ -375,7 +375,7 @@ def calculate_cost(unit_cost_from_csv, project_sqft, apply_discount=True):
     mat = uc * MARKUP_FACTOR * sq_with_waste
     fab = FABRICATION_COST_PER_SQFT * sq_finished
     ins = INSTALL_COST_PER_SQFT * sq_finished
-    ib = ((uc * IB_MATERIAL_MARKUP) + FABRICATION_COST_PER_SQFT) * sq_finished
+    ib = ((uc * IB_MATERIAL_MARKUP) * sq_with_waste) + (FABRICATION_COST_PER_SQFT * sq_finished)
     
     subtotal = mat + fab + ins
     discount_amt = subtotal * discount_pct
