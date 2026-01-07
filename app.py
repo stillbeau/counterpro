@@ -375,7 +375,7 @@ def calculate_cost(unit_cost_from_csv, project_sqft, apply_discount=True):
     mat = uc * MARKUP_FACTOR * sq_with_waste
     fab = FABRICATION_COST_PER_SQFT * sq_finished
     ins = INSTALL_COST_PER_SQFT * sq_finished
-    ib = ((uc * IB_MATERIAL_MARKUP) + FABRICATION_COST_PER_SQFT) * sq_finished
+    ib = ((uc * IB_MATERIAL_MARKUP) * sq_with_waste) + (FABRICATION_COST_PER_SQFT * sq_finished)
     
     subtotal = mat + fab + ins
     discount_amt = subtotal * discount_pct
