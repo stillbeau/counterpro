@@ -143,11 +143,69 @@ st.markdown("""
         background: #ffffff;
         border-right: 1px solid #e2e8f0;
     }
-    
-    [data-testid="stSidebar"] label, 
+
+    [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] span,
     [data-testid="stSidebar"] p {
         color: #334155 !important;
+        font-weight: 500;
+    }
+
+    /* Selectbox styling - light and readable */
+    [data-testid="stSidebar"] .stSelectbox > div > div {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        color: #1e293b !important;
+    }
+
+    [data-testid="stSidebar"] .stSelectbox input {
+        color: #1e293b !important;
+    }
+
+    /* Dropdown menu styling */
+    [data-baseweb="popover"] {
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    [data-baseweb="popover"] li {
+        background: #ffffff !important;
+        color: #1e293b !important;
+    }
+
+    [data-baseweb="popover"] li:hover {
+        background: #f1f5f9 !important;
+    }
+
+    /* Text input styling for search */
+    [data-testid="stSidebar"] .stTextInput > div > div > input {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 6px !important;
+        color: #1e293b !important;
+        font-size: 0.9rem !important;
+        padding: 0.5rem 0.75rem !important;
+    }
+
+    [data-testid="stSidebar"] .stTextInput > div > div > input::placeholder {
+        color: #94a3b8 !important;
+    }
+
+    [data-testid="stSidebar"] .stTextInput > div > div > input:focus {
+        border-color: #4f46e5 !important;
+        box-shadow: 0 0 0 1px #4f46e5 !important;
+    }
+
+    /* Filter section header */
+    [data-testid="stSidebar"] h2 {
+        color: #1e293b !important;
+        font-weight: 600 !important;
+        padding-bottom: 0.5rem !important;
+        border-bottom: 2px solid #e2e8f0 !important;
+        margin-bottom: 1rem !important;
     }
     
     /* Dataframe - improved table style */
@@ -495,21 +553,38 @@ st.sidebar.markdown("""
 """, unsafe_allow_html=True)
 
 # Thickness Filter
+st.sidebar.markdown("<div style='margin-top: 0.5rem;'></div>", unsafe_allow_html=True)
 thicks = ["All"] + sorted(df['Thickness'].dropna().unique().tolist())
-sel_thick = st.sidebar.selectbox("Thickness", thicks)
+sel_thick = st.sidebar.selectbox(
+    "📏 Thickness",
+    thicks,
+    help="Filter by slab thickness"
+)
 
 # Brand Filter
+st.sidebar.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
 brands = ["All"] + sorted(df['Brand'].dropna().unique().tolist())
-sel_brand = st.sidebar.selectbox("Brand", brands)
+sel_brand = st.sidebar.selectbox(
+    "🏷️ Brand",
+    brands,
+    help="Filter by material brand"
+)
 
 # Stock Status Filter
+st.sidebar.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
 stock_filter = st.sidebar.selectbox(
-    "Stock Level",
-    ["All", "🔴 Critical Only", "🟡 Low Stock", "🟢 Good Stock"]
+    "📊 Stock Level",
+    ["All", "🔴 Critical Only", "🟡 Low Stock", "🟢 Good Stock"],
+    help="Filter by stock availability"
 )
 
 # Text Search
-search = st.sidebar.text_input("🔎 Search Brand/Color", placeholder="Type to search...")
+st.sidebar.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
+search = st.sidebar.text_input(
+    "🔎 Search",
+    placeholder="Search by brand or color...",
+    help="Type to search materials"
+)
 
 # Apply Filters
 df_filt = df.copy()
