@@ -438,20 +438,25 @@ def group_slabs_by_material(df):
     elif 'Product Variant' in df.columns:
         serial_col = 'Product Variant'
 
-    # Group and aggregate
-    agg_dict = {
-        'On Hand Qty': 'sum',
-        'Unit_Cost_Internal': 'mean',
-    }
-
+    # Group and aggregate using named aggregation (pandas 0.25+)
     if serial_col:
-        agg_dict['Slab_Count'] = (serial_col, 'nunique')
-        agg_dict['Serial_Numbers'] = (serial_col, lambda x: list(sorted(x.astype(str).unique())))
+        df_grouped = df.groupby(['Brand', 'Color', 'Thickness']).agg(
+            On_Hand_Qty=('On Hand Qty', 'sum'),
+            Unit_Cost_Internal=('Unit_Cost_Internal', 'mean'),
+            Slab_Count=(serial_col, 'nunique'),
+            Serial_Numbers=(serial_col, lambda x: list(sorted(x.astype(str).unique())))
+        ).reset_index()
     else:
-        agg_dict['Slab_Count'] = ('Full_Name', 'count')
-        agg_dict['Serial_Numbers'] = ('Full_Name', lambda x: [])
+        # If no serial column, count rows as slab count
+        df_grouped = df.groupby(['Brand', 'Color', 'Thickness']).agg(
+            On_Hand_Qty=('On Hand Qty', 'sum'),
+            Unit_Cost_Internal=('Unit_Cost_Internal', 'mean'),
+            Slab_Count=('Brand', 'count')  # Count rows
+        ).reset_index()
+        df_grouped['Serial_Numbers'] = [[] for _ in range(len(df_grouped))]
 
-    df_grouped = df.groupby(['Brand', 'Color', 'Thickness']).agg(agg_dict).reset_index()
+    # Rename back to 'On Hand Qty' (with space)
+    df_grouped.rename(columns={'On_Hand_Qty': 'On Hand Qty'}, inplace=True)
 
     # Create full name
     df_grouped['Full_Name'] = df_grouped['Brand'] + " " + df_grouped['Color'] + " (" + df_grouped['Thickness'] + ")"
