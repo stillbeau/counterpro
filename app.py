@@ -480,6 +480,142 @@ st.markdown("""
     [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
         color: #f1f5f9 !important;
     }
+
+    /* Prevent horizontal scroll */
+    html, body, .stApp {
+        max-width: 100%;
+        overflow-x: hidden !important;
+    }
+
+    /* ============================= */
+    /* 📱 MOBILE & TABLET RESPONSIVE */
+    /* ============================= */
+
+    /* Tablets & small laptops */
+    @media (max-width: 1024px) {
+        h1 {
+            font-size: 1.75rem !important;
+        }
+
+        .large-price h1 {
+            font-size: 2.75rem !important;
+        }
+
+        .card-title {
+            font-size: 0.8rem !important;
+        }
+
+        [data-testid="stMetricValue"] {
+            font-size: 1.6rem !important;
+        }
+
+        .stButton > button {
+            font-size: 13px !important;
+            padding: 0.5rem 0.75rem !important;
+        }
+    }
+
+    /* Tablet-optimized two column mode */
+    @media (min-width: 769px) and (max-width: 1024px) {
+        [data-testid="column"] {
+            flex: 1 1 50% !important;
+            max-width: 50% !important;
+        }
+    }
+
+    /* Phones */
+    @media (max-width: 768px) {
+        /* Stack all columns vertically */
+        [data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+
+        /* Make filter row stack vertically */
+        .stHorizontalBlock {
+            flex-direction: column !important;
+            gap: 0.75rem !important;
+        }
+
+        /* Reduce padding inside cards */
+        [data-testid="stVerticalBlockBorderWrapper"] > div {
+            padding: 1.25rem !important;
+        }
+
+        /* Header */
+        h1 {
+            font-size: 1.5rem !important;
+        }
+
+        /* Hero price */
+        .large-price {
+            padding: 1.75rem 1rem !important;
+        }
+
+        .large-price h1 {
+            font-size: 2.25rem !important;
+        }
+
+        .large-price p {
+            font-size: 0.9rem !important;
+        }
+
+        /* Metrics */
+        [data-testid="stMetricValue"] {
+            font-size: 1.4rem !important;
+        }
+
+        [data-testid="stMetricLabel"] {
+            font-size: 0.7rem !important;
+        }
+
+        /* Buttons full width */
+        .stButton > button,
+        .stDownloadButton > button {
+            width: 100% !important;
+            font-size: 14px !important;
+            padding: 0.75rem !important;
+        }
+
+        /* Inputs more touch-friendly - prevents iOS zoom */
+        input, select, textarea {
+            font-size: 16px !important;
+        }
+
+        /* Bigger tap targets on mobile */
+        .stSelectbox div,
+        .stTextInput div,
+        .stNumberInput div {
+            min-height: 44px !important;
+        }
+
+        label {
+            margin-bottom: 0.25rem !important;
+        }
+
+        /* Expander headers */
+        .streamlit-expanderHeader {
+            font-size: 0.75rem !important;
+            padding: 0.75rem !important;
+        }
+
+        /* Captions */
+        .stCaption {
+            font-size: 0.9rem !important;
+        }
+
+        /* Warning boxes */
+        .low-stock, .warning-stock {
+            font-size: 0.875rem !important;
+            padding: 10px 12px !important;
+        }
+
+        /* Card title */
+        .card-title {
+            font-size: 0.85rem !important;
+            margin-bottom: 1rem !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
