@@ -521,6 +521,16 @@ st.markdown("""
             flex: 1 1 50% !important;
             max-width: 50% !important;
         }
+
+        /* Hero price for tablets */
+        .large-price h1 {
+            font-size: 2.5rem !important;
+        }
+
+        /* Executive dashboard feel */
+        .card-title {
+            font-size: 0.85rem !important;
+        }
     }
 
     /* Phones */
@@ -537,6 +547,38 @@ st.markdown("""
             gap: 0.75rem !important;
         }
 
+        /* Filter row optimization */
+        .filter-row {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0.75rem !important;
+        }
+
+        /* Reorder sections for mobile - price first! */
+        .large-price {
+            order: -1 !important;
+            margin-bottom: 1rem !important;
+            border-radius: 16px !important;
+            padding: 1.5rem 1rem !important;
+            text-align: center;
+        }
+
+        .project-config {
+            order: 0 !important;
+        }
+
+        .inventory-details {
+            order: 1 !important;
+        }
+
+        .price-components {
+            order: 2 !important;
+        }
+
+        .margin-analysis {
+            order: 3 !important;
+        }
+
         /* Reduce padding inside cards */
         [data-testid="stVerticalBlockBorderWrapper"] > div {
             padding: 1.25rem !important;
@@ -547,17 +589,14 @@ st.markdown("""
             font-size: 1.5rem !important;
         }
 
-        /* Hero price */
-        .large-price {
-            padding: 1.75rem 1rem !important;
-        }
-
+        /* Hero price - app-like feel */
         .large-price h1 {
-            font-size: 2.25rem !important;
+            font-size: 2.1rem !important;
         }
 
         .large-price p {
-            font-size: 0.9rem !important;
+            font-size: 0.85rem !important;
+            opacity: 0.9;
         }
 
         /* Metrics */
@@ -614,6 +653,25 @@ st.markdown("""
         .card-title {
             font-size: 0.85rem !important;
             margin-bottom: 1rem !important;
+        }
+
+        /* Inventory details - condensed */
+        .inventory-details h4 {
+            font-size: 0.9rem !important;
+        }
+
+        .inventory-details p {
+            font-size: 0.85rem !important;
+        }
+
+        /* Margin analysis - compact */
+        .margin-analysis {
+            font-size: 0.85rem !important;
+        }
+
+        /* Price components - better spacing */
+        .price-components [data-testid="stMetricValue"] {
+            font-size: 1.3rem !important;
         }
     }
 </style>
@@ -880,6 +938,7 @@ if error:
     st.stop()
 
 # --- FILTER ROW ---
+st.markdown('<div class="filter-row">', unsafe_allow_html=True)
 filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([1, 1, 1, 0.5])
 
 with filter_col1:
@@ -911,6 +970,7 @@ with filter_col4:
         st.cache_data.clear()
         st.rerun()
 
+st.markdown('</div>', unsafe_allow_html=True)  # Close filter-row
 st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
 
 # Apply Filters
@@ -930,6 +990,7 @@ if df_grouped.empty:
     st.stop()
 
 # --- PROJECT CONFIGURATION ---
+st.markdown('<div class="project-config">', unsafe_allow_html=True)
 with st.container(border=True):
     st.markdown('<span class="card-title">⚙️ Project Configuration</span>', unsafe_allow_html=True)
 
@@ -962,6 +1023,7 @@ with st.container(border=True):
     else:
         st.warning(f"⚠️ No materials have {sq_with_waste_needed:.0f} sf required")
 
+st.markdown('</div>', unsafe_allow_html=True)  # Close project-config
 st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
 
 # --- MAIN DASHBOARD (Two-Column) ---
@@ -977,6 +1039,7 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
 
     # LEFT COLUMN - Inventory Details
     with col1:
+        st.markdown('<div class="inventory-details">', unsafe_allow_html=True)
         # Availability Warning
         if sq_with_waste > available_qty:
             st.markdown(f"""
@@ -1035,6 +1098,8 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
                     for idx, slab in enumerate(slab_details[len(slabs_needed):], len(slabs_needed) + 1):
                         st.caption(f"{idx}. {slab['variant']} - {slab['qty']:.0f} sf")
 
+        st.markdown('</div>', unsafe_allow_html=True)  # Close inventory-details
+
     # RIGHT COLUMN - Pricing & Analytics
     with col2:
         # Large Price Display (Hero)
@@ -1055,6 +1120,7 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
 """, unsafe_allow_html=True)
 
         # Price breakdown metrics
+        st.markdown('<div class="price-components">', unsafe_allow_html=True)
         with st.container(border=True):
             st.markdown('<span class="card-title">💰 Price Components</span>', unsafe_allow_html=True)
 
@@ -1062,10 +1128,12 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
             price_col1.metric("Material", f"${costs['material_total']:,.2f}")
             price_col2.metric("Fabrication", f"${costs['fab_total']:,.2f}")
             price_col3.metric("Installation", f"${costs['install_total']:,.2f}")
+        st.markdown('</div>', unsafe_allow_html=True)  # Close price-components
 
     st.markdown("<div style='margin: 2rem 0;'></div>", unsafe_allow_html=True)
 
     # MARGIN ANALYSIS (Internal - At Bottom)
+    st.markdown('<div class="margin-analysis">', unsafe_allow_html=True)
     with st.expander("🔐 Margin Analysis (Internal Only)", expanded=False):
         margin_class = get_margin_class(costs['margin_pct'])
 
@@ -1104,6 +1172,8 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
             st.info("📊 Acceptable margin - some negotiation room available")
         else:
             st.warning("⚠️ Below target margin (<20%) - limit discounts")
+
+    st.markdown('</div>', unsafe_allow_html=True)  # Close margin-analysis
 
 else:
     st.markdown("""
