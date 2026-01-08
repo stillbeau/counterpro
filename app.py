@@ -11,20 +11,40 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - Matching Branch Auditor Extension Style
+# Custom CSS - Modern SaaS Dashboard Style
 st.markdown("""
 <style>
-    /* Main styling - Clean light theme matching extension */
+    /* Main styling - Modern SaaS theme */
     .stApp {
         background: #f8fafc;
+        font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
     }
-    
+
+    /* Card container */
+    .dashboard-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 0.875rem;
+    }
+
     /* Ensure all text is dark and readable */
     .stApp, .stApp p, .stApp span, .stApp label, .stApp div {
         color: #334155 !important;
     }
-    
-    /* Headers - matching extension header style */
+
+    /* Headers */
     h1, h2, h3, .stSubheader {
         color: #1e293b !important;
         font-weight: 600 !important;
@@ -138,17 +158,24 @@ st.markdown("""
         color: #16a34a !important;
     }
     
-    /* Sidebar - clean style */
+    /* Sidebar - dark theme */
     [data-testid="stSidebar"] {
-        background: #ffffff;
-        border-right: 1px solid #e2e8f0;
+        background: #1e293b;
+        border-right: 1px solid #334155;
     }
 
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] span,
-    [data-testid="stSidebar"] p {
-        color: #334155 !important;
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #f1f5f9 !important;
         font-weight: 500;
+    }
+
+    [data-testid="stSidebar"] .stMarkdown {
+        color: #f1f5f9 !important;
     }
 
     /* Selectbox styling - light and readable */
@@ -328,6 +355,79 @@ st.markdown("""
     /* Divider */
     hr {
         border-color: #e2e8f0;
+    }
+
+    /* Large price display */
+    .large-price {
+        text-align: center;
+        padding: 2rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        color: white !important;
+        margin: 1.5rem 0;
+    }
+
+    .large-price h1 {
+        color: white !important;
+        font-size: 3rem !important;
+        margin: 0 !important;
+        font-weight: 700 !important;
+    }
+
+    .large-price p {
+        color: rgba(255,255,255,0.9) !important;
+        font-size: 0.875rem !important;
+        margin-top: 0.5rem !important;
+    }
+
+    /* Margin progress bar */
+    .margin-bar-container {
+        width: 100%;
+        height: 12px;
+        background: #e2e8f0;
+        border-radius: 6px;
+        overflow: hidden;
+        margin: 0.5rem 0;
+    }
+
+    .margin-bar-fill {
+        height: 100%;
+        border-radius: 6px;
+        transition: width 0.3s ease;
+    }
+
+    .margin-excellent { background: linear-gradient(90deg, #10b981, #059669); }
+    .margin-good { background: linear-gradient(90deg, #f59e0b, #d97706); }
+    .margin-low { background: linear-gradient(90deg, #ef4444, #dc2626); }
+
+    /* Compact stat */
+    .stat-item {
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .stat-item:last-child {
+        border-bottom: none;
+    }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    /* Compact inputs */
+    .stNumberInput input, .stSelectbox > div > div {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.9rem !important;
     }
 </style>
 """, unsafe_allow_html=True)
