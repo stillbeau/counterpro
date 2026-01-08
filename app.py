@@ -157,16 +157,24 @@ if df is not None:
         with col_a:
             sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0)
         with col_b:
+            # Filter to only show materials with sufficient stock
+            required_sqft = sqft * WASTE_FACTOR
+            available_df = grouped_df[grouped_df['On Hand Qty'] >= required_sqft].copy()
+
             # Create display options with total sqft for grouped materials
-            grouped_df['display_name'] = grouped_df.apply(
+            available_df['display_name'] = available_df.apply(
                 lambda row: f"{row['Product Variant']} ({row['On Hand Qty']:.1f} sf)", axis=1
             )
 
             # Create a mapping for reverse lookup
-            display_to_variant = dict(zip(grouped_df['display_name'], grouped_df['Product Variant']))
+            display_to_variant = dict(zip(available_df['display_name'], available_df['Product Variant']))
 
-            selected_display = st.selectbox("Select Slab", grouped_df['display_name'].unique())
-            selected_variant = display_to_variant[selected_display]
+            if len(available_df) > 0:
+                selected_display = st.selectbox("Select Slab", available_df['display_name'].unique())
+                selected_variant = display_to_variant[selected_display]
+            else:
+                st.warning("No materials available with sufficient stock for this square footage.")
+                selected_variant = None
 
     # Results
     if selected_variant:
