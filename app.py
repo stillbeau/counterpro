@@ -27,7 +27,9 @@ st.markdown("""
         padding: 1.75rem;
         box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
         margin-bottom: 1.5rem;
-        border: 1px solid #f1f5f9;
+        border: 1px solid #e2e8f0;
+        overflow: visible;
+        position: relative;
     }
 
     .card-title {
@@ -353,6 +355,16 @@ st.markdown("""
         font-size: 0.8rem !important;
         line-height: 1.5 !important;
     }
+
+    /* Caption within dashboard cards */
+    .dashboard-card .stCaption,
+    .dashboard-card [data-testid="stCaptionContainer"] {
+        color: #16a34a !important;
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+        margin: 0.75rem 0 !important;
+        line-height: 1.6 !important;
+    }
     
     /* KPI style badges */
     .kpi-excellent {
@@ -469,6 +481,57 @@ st.markdown("""
     .stNumberInput input, .stSelectbox > div > div {
         padding: 0.5rem 0.75rem !important;
         font-size: 0.9rem !important;
+    }
+
+    /* Input labels - ensure proper styling inside cards */
+    .dashboard-card .stNumberInput label,
+    .dashboard-card .stSelectbox label,
+    .dashboard-card .stTextInput label {
+        color: #1e293b !important;
+        font-size: 0.875rem !important;
+        font-weight: 600 !important;
+        margin-bottom: 0.5rem !important;
+        line-height: 1.5 !important;
+    }
+
+    /* Input fields within cards */
+    .dashboard-card .stNumberInput,
+    .dashboard-card .stSelectbox,
+    .dashboard-card .stTextInput {
+        margin-bottom: 1rem;
+    }
+
+    /* Number input specific styling */
+    .dashboard-card .stNumberInput input {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #1e293b !important;
+        font-size: 1rem !important;
+        font-weight: 500 !important;
+    }
+
+    /* Select dropdown styling within cards */
+    .dashboard-card .stSelectbox > div > div {
+        background: #f8fafc !important;
+        border: 1px solid #cbd5e1 !important;
+        color: #1e293b !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* Warning messages within dashboard cards */
+    .dashboard-card .stWarning,
+    .dashboard-card [data-testid="stNotification"] {
+        background: #fef3c7 !important;
+        border-left: 3px solid #d97706 !important;
+        padding: 0.75rem 1rem !important;
+        border-radius: 0 6px 6px 0 !important;
+        margin: 0.75rem 0 !important;
+    }
+
+    .dashboard-card .stWarning p {
+        color: #92400e !important;
+        font-size: 0.875rem !important;
+        margin: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
