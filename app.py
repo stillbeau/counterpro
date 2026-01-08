@@ -20,36 +20,25 @@ st.markdown("""
         font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
     }
 
-    /* Card container */
-    .dashboard-card {
-        background: white;
-        border-radius: 12px;
-        padding: 1.75rem;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        margin-bottom: 1.5rem;
-        border: 1px solid #e2e8f0;
-        overflow: visible;
-        position: relative;
+    /* Target native Streamlit bordered containers to act as cards */
+    [data-testid="stVerticalBlockBorderWrapper"] > div {
+        background-color: white !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        padding: 1.75rem !important;
+        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1) !important;
+        margin-bottom: 1rem !important;
     }
 
     .card-title {
-        font-size: 0.875rem;
+        font-size: 0.9rem;
         font-weight: 700;
         color: #1e293b;
-        margin-bottom: 1.25rem;
+        margin-bottom: 1rem;
         text-transform: uppercase;
         letter-spacing: 0.075em;
+        display: block;
         line-height: 1.5;
-    }
-
-    .dashboard-card p, .dashboard-card span, .dashboard-card div {
-        line-height: 1.6;
-        font-size: 0.95rem;
-    }
-
-    .dashboard-card strong {
-        font-weight: 600;
-        color: #1e293b;
     }
 
     /* Ensure all text is dark and readable */
@@ -63,13 +52,14 @@ st.markdown("""
         font-weight: 600 !important;
     }
     
-    /* Metric values */
+    /* Metric values - Fixed padding and line-height to prevent clipping */
     [data-testid="stMetricValue"] {
         color: #1e293b !important;
         font-weight: 700 !important;
-        font-size: 1.8rem !important;
-        line-height: 1.6 !important;
-        padding-bottom: 5px !important;
+        font-size: 2rem !important;
+        line-height: 1.4 !important;
+        padding-top: 5px !important;
+        padding-bottom: 10px !important;
     }
 
     [data-testid="stMetricLabel"] {
@@ -79,6 +69,14 @@ st.markdown("""
         letter-spacing: 0.05em !important;
         font-weight: 600 !important;
         margin-bottom: 0.25rem !important;
+    }
+
+    /* Widget Labels (input fields, dropdowns, etc.) */
+    [data-testid="stWidgetLabel"] p {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        color: #334155 !important;
+        line-height: 1.5 !important;
     }
     
     /* Card styling - matching extension cards */
@@ -341,29 +339,20 @@ st.markdown("""
         font-size: 11px;
     }
     
-    /* Captions */
-    .stCaption, small {
-        color: #64748b !important;
-        font-size: 0.8rem;
-        line-height: 1.5;
+    /* Captions - improved size and readability */
+    .stCaption, [data-testid="stCaptionContainer"] {
+        font-size: 0.95rem !important;
+        color: #475569 !important;
+        line-height: 1.6 !important;
+        margin-top: 0.5rem !important;
         font-weight: 500;
     }
 
-    /* Improved caption readability */
-    [data-testid="stCaptionContainer"] {
-        color: #64748b !important;
-        font-size: 0.8rem !important;
-        line-height: 1.5 !important;
-    }
-
-    /* Caption within dashboard cards */
-    .dashboard-card .stCaption,
-    .dashboard-card [data-testid="stCaptionContainer"] {
-        color: #16a34a !important;
-        font-size: 0.85rem !important;
-        font-weight: 500 !important;
-        margin: 0.75rem 0 !important;
+    /* Fix selectbox text clipping */
+    .stSelectbox div[data-baseweb="select"] > div {
+        font-size: 1rem !important;
         line-height: 1.6 !important;
+        padding: 4px 0 !important;
     }
     
     /* KPI style badges */
@@ -406,8 +395,8 @@ st.markdown("""
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 12px;
         color: white !important;
-        margin: 1.5rem 0;
         box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
+        margin: 1rem 0;
     }
 
     .large-price h1 {
@@ -415,15 +404,15 @@ st.markdown("""
         font-size: 3.5rem !important;
         margin: 0.5rem 0 !important;
         font-weight: 700 !important;
-        line-height: 1.1 !important;
+        line-height: 1.2 !important;
         letter-spacing: -0.02em !important;
     }
 
     .large-price p {
         color: white !important;
-        font-size: 0.9rem !important;
-        margin: 0.25rem 0 !important;
+        font-size: 1rem !important;
         opacity: 0.9;
+        margin: 0.25rem 0 !important;
     }
 
     .large-price * {
@@ -477,61 +466,9 @@ st.markdown("""
         line-height: 1.2;
     }
 
-    /* Compact inputs */
-    .stNumberInput input, .stSelectbox > div > div {
-        padding: 0.5rem 0.75rem !important;
-        font-size: 0.9rem !important;
-    }
-
-    /* Input labels - ensure proper styling inside cards */
-    .dashboard-card .stNumberInput label,
-    .dashboard-card .stSelectbox label,
-    .dashboard-card .stTextInput label {
-        color: #1e293b !important;
-        font-size: 0.875rem !important;
-        font-weight: 600 !important;
-        margin-bottom: 0.5rem !important;
-        line-height: 1.5 !important;
-    }
-
-    /* Input fields within cards */
-    .dashboard-card .stNumberInput,
-    .dashboard-card .stSelectbox,
-    .dashboard-card .stTextInput {
-        margin-bottom: 1rem;
-    }
-
-    /* Number input specific styling */
-    .dashboard-card .stNumberInput input {
-        background: #f8fafc !important;
-        border: 1px solid #cbd5e1 !important;
-        color: #1e293b !important;
-        font-size: 1rem !important;
-        font-weight: 500 !important;
-    }
-
-    /* Select dropdown styling within cards */
-    .dashboard-card .stSelectbox > div > div {
-        background: #f8fafc !important;
-        border: 1px solid #cbd5e1 !important;
-        color: #1e293b !important;
-        font-size: 0.95rem !important;
-    }
-
-    /* Warning messages within dashboard cards */
-    .dashboard-card .stWarning,
-    .dashboard-card [data-testid="stNotification"] {
-        background: #fef3c7 !important;
-        border-left: 3px solid #d97706 !important;
-        padding: 0.75rem 1rem !important;
-        border-radius: 0 6px 6px 0 !important;
-        margin: 0.75rem 0 !important;
-    }
-
-    .dashboard-card .stWarning p {
-        color: #92400e !important;
-        font-size: 0.875rem !important;
-        margin: 0 !important;
+    /* Sidebar Labels */
+    [data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {
+        color: #f1f5f9 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -879,40 +816,38 @@ col1, col2 = st.columns([1, 1])
 
 # LEFT COLUMN - Quote Calculator
 with col1:
-    # Quote Calculator Card
-    st.markdown('<div class="dashboard-card"><div class="card-title">📋 Quote Calculator</div>', unsafe_allow_html=True)
+    # Quote Calculator Container
+    with st.container(border=True):
+        st.markdown('<span class="card-title">📋 Quote Calculator</span>', unsafe_allow_html=True)
 
-    req_sqft = st.number_input(
-        "Project Square Footage (Finished)",
-        min_value=1.0,
-        value=35.0,
-        step=5.0,
-        help="Enter the finished square footage needed"
-    )
+        req_sqft = st.number_input(
+            "Project Square Footage (Finished)",
+            min_value=1.0,
+            value=35.0,
+            step=5.0,
+            help="Enter the finished square footage needed"
+        )
 
-    # Filter materials to only show those with enough combined material (including waste factor)
-    sq_with_waste_needed = req_sqft * WASTE_FACTOR
-    df_adequate = df_grouped[df_grouped['On Hand Qty'] >= sq_with_waste_needed].copy() if not df_grouped.empty else pd.DataFrame()
-    slab_options = df_adequate['Full_Name'].unique().tolist() if not df_adequate.empty else []
+        # Filter materials to only show those with enough combined material (including waste factor)
+        sq_with_waste_needed = req_sqft * WASTE_FACTOR
+        df_adequate = df_grouped[df_grouped['On Hand Qty'] >= sq_with_waste_needed].copy() if not df_grouped.empty else pd.DataFrame()
+        slab_options = df_adequate['Full_Name'].unique().tolist() if not df_adequate.empty else []
 
-    # Show availability info
-    adequate_materials = len(slab_options)
-    if adequate_materials > 0:
-        st.caption(f"✓ {adequate_materials} material(s) available with {sq_with_waste_needed:.0f} sf needed (incl. waste)")
-    else:
-        st.warning(f"No materials have {sq_with_waste_needed:.0f} sf required")
+        # Show availability info
+        if not df_adequate.empty:
+            st.caption(f"✓ {len(slab_options)} material(s) available with {sq_with_waste_needed:.0f} sf needed (incl. waste)")
+        else:
+            st.warning(f"No materials have {sq_with_waste_needed:.0f} sf required")
 
-    sel_slab = st.selectbox("Select Material", slab_options if slab_options else ["No materials available"], label_visibility="collapsed")
+        sel_slab = st.selectbox("Select Material", slab_options if slab_options else ["No materials available"], label_visibility="visible")
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    # Margin Analysis Container
+    if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
+        row = df_adequate[df_adequate['Full_Name'] == sel_slab].iloc[0]
+        costs = calculate_cost(row['Unit_Cost_Internal'], req_sqft)
 
-    # Margin Analysis Card (in col1)
-    with col1:
-        if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
-            row = df_adequate[df_adequate['Full_Name'] == sel_slab].iloc[0]
-            costs = calculate_cost(row['Unit_Cost_Internal'], req_sqft)
-
-            st.markdown('<div class="dashboard-card"><div class="card-title">🔐 Margin Analysis (Internal)</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown('<span class="card-title">🔐 Margin Analysis (Internal)</span>', unsafe_allow_html=True)
 
             margin_class = get_margin_class(costs['margin_pct'])
 
@@ -923,31 +858,26 @@ with col1:
 
             # Margin with color coding
             mc3.markdown(f"""
-            <div style="text-align: center;">
-                <div class="stat-label">Margin</div>
-                <div class="{margin_class}" style="font-size: 1.75rem; font-weight: 700;">{costs['margin_pct']:.1f}%</div>
-            </div>
-            """, unsafe_allow_html=True)
+<div style="text-align: center;">
+<div style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 0.5rem;">Margin</div>
+<div class="{margin_class}" style="font-size: 2rem; font-weight: 700; line-height: 1.2;">{costs['margin_pct']:.1f}%</div>
+</div>
+""", unsafe_allow_html=True)
 
             # Margin progress bar
             margin_color_class = "margin-excellent" if costs['margin_pct'] >= 30 else ("margin-good" if costs['margin_pct'] >= 20 else "margin-low")
             st.markdown(f"""
-            <div class="margin-bar-container">
-                <div class="margin-bar-fill {margin_color_class}" style="width: {min(costs['margin_pct'], 100)}%;"></div>
-            </div>
-            """, unsafe_allow_html=True)
+<div class="margin-bar-container">
+<div class="margin-bar-fill {margin_color_class}" style="width: {min(costs['margin_pct'], 100)}%;"></div>
+</div>
+""", unsafe_allow_html=True)
 
-            st.markdown("<div style='margin: 1rem 0;'></div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
-            # Cost breakdown
-            st.markdown("**Cost Breakdown:**")
-            breakdown_cols = st.columns(4)
-            breakdown_cols[0].caption(f"Unit Cost\n${row['Unit_Cost_Internal']:,.2f}/sf")
-            breakdown_cols[1].caption(f"Waste Factor\n{WASTE_FACTOR}x")
-            breakdown_cols[2].caption(f"Fab Rate\n${FABRICATION_COST_PER_SQFT}/sf")
-            breakdown_cols[3].caption(f"Install Rate\n${INSTALL_COST_PER_SQFT}/sf")
+            # Cost breakdown - simplified
+            st.markdown(f"**Unit Cost:** ${row['Unit_Cost_Internal']:,.2f}/sf | **Fab:** ${FABRICATION_COST_PER_SQFT}/sf | **Install:** ${INSTALL_COST_PER_SQFT}/sf")
 
-            st.markdown("<div style='margin: 1rem 0;'></div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
             # Margin guidance
             if costs['margin_pct'] >= 30:
@@ -956,8 +886,6 @@ with col1:
                 st.info("📊 Acceptable margin - some negotiation room available")
             else:
                 st.warning("⚠️ Below target margin (<20%) - limit discounts")
-
-            st.markdown('</div>', unsafe_allow_html=True)
 
 # RIGHT COLUMN - Live Context & Pricing
 if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
@@ -972,117 +900,96 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
         # Availability Warning
         if sq_with_waste > available_qty:
             st.markdown(f"""
-            <div class="low-stock">
-                ⚠️ <strong>Insufficient Stock!</strong> Need {sq_with_waste:.0f} sf (with waste), only {available_qty:.0f} sf available.
-            </div>
-            """, unsafe_allow_html=True)
+<div class="low-stock">
+⚠️ <strong>Insufficient Stock!</strong> Need {sq_with_waste:.0f} sf (with waste), only {available_qty:.0f} sf available.
+</div>
+""", unsafe_allow_html=True)
         elif sq_with_waste > available_qty * 0.8:
             st.markdown(f"""
-            <div class="warning-stock">
-                ⚡ <strong>Tight Fit!</strong> Using {sq_with_waste:.0f} sf of {available_qty:.0f} sf available ({row['Slab_Count']} slabs).
-            </div>
-            """, unsafe_allow_html=True)
+<div class="warning-stock">
+⚡ <strong>Tight Fit!</strong> Using {sq_with_waste:.0f} sf of {available_qty:.0f} sf available ({row['Slab_Count']} slabs).
+</div>
+""", unsafe_allow_html=True)
 
-        # Live Inventory Context Card
-        st.markdown('<div class="dashboard-card"><div class="card-title">📦 Live Inventory Context</div>', unsafe_allow_html=True)
+        # Live Inventory Context Container
+        with st.container(border=True):
+            st.markdown('<span class="card-title">📦 Live Inventory Context</span>', unsafe_allow_html=True)
 
-        # Material details
-        inv_col1, inv_col2, inv_col3 = st.columns(3)
-        with inv_col1:
-            st.markdown(f"""
-            <div style='text-align: center;'>
-                <div style='font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 0.25rem;'>Brand</div>
-                <div style='font-size: 1rem; font-weight: 600; color: #1e293b;'>{row['Brand']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with inv_col2:
-            st.markdown(f"""
-            <div style='text-align: center;'>
-                <div style='font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 0.25rem;'>Color</div>
-                <div style='font-size: 1rem; font-weight: 600; color: #1e293b;'>{row['Color']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with inv_col3:
-            st.markdown(f"""
-            <div style='text-align: center;'>
-                <div style='font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 0.25rem;'>Thickness</div>
-                <div style='font-size: 1rem; font-weight: 600; color: #1e293b;'>{row['Thickness']}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Material details - use metrics instead of custom HTML
+            inv_col1, inv_col2, inv_col3 = st.columns(3)
+            inv_col1.metric("Brand", row['Brand'])
+            inv_col2.metric("Color", row['Color'])
+            inv_col3.metric("Thickness", row['Thickness'])
 
-        st.markdown("<div style='margin: 1rem 0; border-top: 1px solid #e2e8f0;'></div>", unsafe_allow_html=True)
+            st.divider()
 
-        # Calculate slabs needed
-        slab_details = row['Slab_Details']
-        slabs_needed = []
-        remaining_needed = sq_with_waste
+            # Calculate slabs needed
+            slab_details = row['Slab_Details']
+            slabs_needed = []
+            remaining_needed = sq_with_waste
 
-        for detail in slab_details:
-            if remaining_needed <= 0:
-                break
-            slabs_needed.append(detail)
-            remaining_needed -= detail['qty']
+            for detail in slab_details:
+                if remaining_needed <= 0:
+                    break
+                slabs_needed.append(detail)
+                remaining_needed -= detail['qty']
 
-        # Inventory stats
-        inv_stat_col1, inv_stat_col2 = st.columns(2)
-        with inv_stat_col1:
-            st.metric("Total Available", f"{available_qty:.0f} sf")
-            st.caption(f"{row['Slab_Count']} slabs in stock")
-        with inv_stat_col2:
-            st.metric("Required (w/ waste)", f"{sq_with_waste:.0f} sf")
-            st.caption(f"{len(slabs_needed)} slab(s) needed")
+            # Inventory stats
+            inv_stat_col1, inv_stat_col2 = st.columns(2)
+            inv_stat_col1.metric("Total Available", f"{available_qty:.0f} sf")
+            inv_stat_col1.caption(f"{row['Slab_Count']} slabs in stock")
+            inv_stat_col2.metric("Required (w/ waste)", f"{sq_with_waste:.0f} sf")
+            inv_stat_col2.caption(f"{len(slabs_needed)} slab(s) needed")
 
-        st.markdown("<div style='margin: 1rem 0;'></div>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
-        # Slab details expander
-        with st.expander("📋 View Slab Serial Numbers", expanded=False):
-            st.markdown("**Slabs Used for This Job:**")
-            for idx, slab in enumerate(slabs_needed, 1):
-                st.caption(f"{idx}. {slab['variant']} - {slab['qty']:.0f} sf")
-
-            if len(slabs_needed) < len(slab_details):
-                st.markdown("<div style='margin: 0.75rem 0; border-top: 1px solid #f1f5f9;'></div>", unsafe_allow_html=True)
-                st.markdown(f"**{len(slab_details) - len(slabs_needed)} Additional Slab(s) Available:**")
-                for idx, slab in enumerate(slab_details[len(slabs_needed):], len(slabs_needed) + 1):
+            # Slab details expander
+            with st.expander("📋 View Slab Serial Numbers", expanded=False):
+                st.markdown("**Slabs Used for This Job:**")
+                for idx, slab in enumerate(slabs_needed, 1):
                     st.caption(f"{idx}. {slab['variant']} - {slab['qty']:.0f} sf")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+                if len(slabs_needed) < len(slab_details):
+                    st.divider()
+                    st.markdown(f"**{len(slab_details) - len(slabs_needed)} Additional Slab(s) Available:**")
+                    for idx, slab in enumerate(slab_details[len(slabs_needed):], len(slabs_needed) + 1):
+                        st.caption(f"{idx}. {slab['variant']} - {slab['qty']:.0f} sf")
 
-        # Large Price Display Card
+        # Large Price Display
         tax_amt = costs['subtotal_after_discount'] * TAX_RATE
         total = costs['subtotal_after_discount'] + tax_amt
 
         discount_text = ""
         if costs['discount_pct'] > 0:
-            discount_text = f"<p style='margin: 0.5rem 0; color: white; font-size: 0.9rem;'>🎉 {costs['discount_pct']*100:.0f}% Volume Discount Applied</p>"
+            discount_text = f"<p style='margin: 0.5rem 0; color: white; font-size: 1rem;'>🎉 {costs['discount_pct']*100:.0f}% Volume Discount Applied</p>"
 
         st.markdown(f"""
 <div class="large-price">
-<p style='margin: 0; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.9; color: white;'>Total Installed Price</p>
-<h1 style='color: white; font-size: 3rem; margin: 0.5rem 0; font-weight: 700;'>${total:,.2f}</h1>
+<p style='text-transform: uppercase; letter-spacing: 0.1em;'>Total Installed Price</p>
+<h1>${total:,.2f}</h1>
 {discount_text}
-<p style='margin: 0.5rem 0 0 0; opacity: 0.85; color: white; font-size: 0.875rem;'>Based on {req_sqft:.0f} sf finished (includes 5% tax)</p>
+<p>Based on {req_sqft:.0f} sf finished (includes 5% tax)</p>
 </div>
 """, unsafe_allow_html=True)
 
         # Price breakdown metrics
-        st.markdown('<div class="dashboard-card"><div class="card-title">💰 Price Components</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown('<span class="card-title">💰 Price Components</span>', unsafe_allow_html=True)
 
-        price_col1, price_col2, price_col3 = st.columns(3)
-        price_col1.metric("Material", f"${costs['material_total']:,.2f}")
-        price_col2.metric("Fabrication", f"${costs['fab_total']:,.2f}")
-        price_col3.metric("Installation", f"${costs['install_total']:,.2f}")
+            price_col1, price_col2, price_col3 = st.columns(3)
+            price_col1.metric("Material", f"${costs['material_total']:,.2f}")
+            price_col2.metric("Fabrication", f"${costs['fab_total']:,.2f}")
+            price_col3.metric("Installation", f"${costs['install_total']:,.2f}")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Client Quote Generator Container
+        with st.container(border=True):
+            st.markdown('<span class="card-title">📧 Generate Client Quote</span>', unsafe_allow_html=True)
 
-        # Client Quote Generator Card
-        st.markdown('<div class="dashboard-card"><div class="card-title">📧 Generate Client Quote</div>', unsafe_allow_html=True)
+            discount_text = ""
+            if costs['discount_pct'] > 0:
+                discount_text = f"\n🎉 Volume Discount Applied: {costs['discount_pct']*100:.0f}% off!"
 
-        discount_text = ""
-        if costs['discount_pct'] > 0:
-            discount_text = f"\n🎉 Volume Discount Applied: {costs['discount_pct']*100:.0f}% off!"
-
-        email_body = f"""Hi,
+            email_body = f"""Hi,
 
 I found a clearance option for your project:
 
@@ -1096,13 +1003,11 @@ This is a limited-availability clearance piece. Let me know if you'd like to sec
 
 Best regards"""
 
-        st.text_area("Email Template", email_body, height=280, key="email_copy")
+            st.text_area("Email Template", email_body, height=280, key="email_copy")
 
-        if st.button("📋 Copy to Clipboard", use_container_width=True, type="primary"):
-            st.code(email_body, language=None)
-            st.success("✅ Email copied! Use Ctrl+C to copy from the box above.")
-
-        st.markdown('</div>', unsafe_allow_html=True)
+            if st.button("📋 Copy to Clipboard", use_container_width=True, type="primary"):
+                st.code(email_body, language=None)
+                st.success("✅ Email copied! Use Ctrl+C to copy from the box above.")
 
 else:
     with col2:
