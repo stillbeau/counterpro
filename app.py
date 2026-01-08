@@ -722,83 +722,60 @@ def fetch_all_data():
 
 
 # --- 3. APP INTERFACE ---
-# Improved header with better layout
-header_col1, header_col2 = st.columns([3, 1])
-with header_col1:
-    st.markdown("""
-    <div style="padding: 1rem 0;">
-        <h1 style="margin: 0; padding: 0; font-size: 2rem; font-weight: 700; color: #1e293b;">
-            🧱 Dead Stock Sales Tool
-        </h1>
-        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem;">
-            Clearance inventory quoting system with margin visibility
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-with header_col2:
-    # Moved buttons to header
-    pass
+# Header
+st.markdown("""
+<div style="padding: 1rem 0 0.5rem 0;">
+    <h1 style="margin: 0; padding: 0; font-size: 2rem; font-weight: 700; color: #1e293b;">
+        🧱 Dead Stock Sales Tool
+    </h1>
+    <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem;">
+        Clearance inventory quoting system with margin visibility
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
-# Action buttons in a cleaner layout
-st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
-col_refresh, col_export, col_spacer = st.columns([1.2, 1.2, 3.6])
+st.markdown("<div style='margin: 1rem 0;'></div>", unsafe_allow_html=True)
 
-with col_refresh:
-    if st.button("🔄 Refresh Data", use_container_width=True, type="primary"):
-        st.cache_data.clear()
-        st.rerun()
-
-# Load data
+# Load data first
 df, error = fetch_all_data()
 
 if error:
     st.error(error)
     st.stop()
 
-with col_export:
-    csv_data = df[['Full_Name', 'On Hand Qty', 'Unit_Cost_Internal', 'Thickness']].to_csv(index=False)
-    st.download_button(
-        "📥 Export CSV",
-        csv_data,
-        file_name=f"dead_stock_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        use_container_width=True
+# --- FILTER ROW ---
+filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([1, 1, 1, 0.5])
+
+with filter_col1:
+    thicks = ["All"] + sorted(df['Thickness'].dropna().unique().tolist())
+    sel_thick = st.selectbox(
+        "📏 Thickness",
+        thicks,
+        help="Filter by slab thickness"
     )
 
-# --- SIDEBAR FILTERS ---
-st.sidebar.markdown("""
-<div style="padding: 0.5rem 0 1rem 0;">
-    <h2 style="margin: 0; font-size: 1.1rem; font-weight: 600; color: #1e293b;">
-        🔍 Filter Inventory
-    </h2>
-</div>
-""", unsafe_allow_html=True)
+with filter_col2:
+    brands = ["All"] + sorted(df['Brand'].dropna().unique().tolist())
+    sel_brand = st.selectbox(
+        "🏷️ Brand",
+        brands,
+        help="Filter by material brand"
+    )
 
-# Thickness Filter
-st.sidebar.markdown("<div style='margin-top: 0.5rem;'></div>", unsafe_allow_html=True)
-thicks = ["All"] + sorted(df['Thickness'].dropna().unique().tolist())
-sel_thick = st.sidebar.selectbox(
-    "📏 Thickness",
-    thicks,
-    help="Filter by slab thickness"
-)
+with filter_col3:
+    search = st.text_input(
+        "🔎 Search",
+        placeholder="Search by brand or color...",
+        help="Type to search materials"
+    )
 
-# Brand Filter
-st.sidebar.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-brands = ["All"] + sorted(df['Brand'].dropna().unique().tolist())
-sel_brand = st.sidebar.selectbox(
-    "🏷️ Brand",
-    brands,
-    help="Filter by material brand"
-)
+with filter_col4:
+    st.markdown("<div style='margin-top: 1.85rem;'></div>", unsafe_allow_html=True)
+    if st.button("🔄 Refresh", use_container_width=True, type="primary"):
+        st.cache_data.clear()
+        st.rerun()
 
-# Text Search
-st.sidebar.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
-search = st.sidebar.text_input(
-    "🔎 Search",
-    placeholder="Search by brand or color...",
-    help="Type to search materials"
-)
+st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
 
 # Apply Filters
 df_filt = df.copy()
@@ -816,22 +793,13 @@ if df_grouped.empty:
     st.warning("⚠️ No materials match your filters. Try adjusting your search criteria.")
     st.stop()
 
-# --- DASHBOARD LAYOUT (Two-Column Design) ---
-st.markdown("<div style='margin: 1rem 0;'></div>", unsafe_allow_html=True)
+# --- PROJECT CONFIGURATION ---
+with st.container(border=True):
+    st.markdown('<span class="card-title">⚙️ Project Configuration</span>', unsafe_allow_html=True)
 
-# Initialize comparison list in session state
-if 'comparison_slabs' not in st.session_state:
-    st.session_state.comparison_slabs = []
+    config_col1, config_col2 = st.columns(2)
 
-# Two-column layout - adjusted for better balance
-col1, col2 = st.columns([0.95, 1.05])
-
-# LEFT COLUMN - Quote Calculator
-with col1:
-    # Quote Calculator Container
-    with st.container(border=True):
-        st.markdown('<span class="card-title">📋 Quote Calculator</span>', unsafe_allow_html=True)
-
+    with config_col1:
         req_sqft = st.number_input(
             "Project Square Footage (Finished)",
             min_value=1.0,
@@ -840,66 +808,27 @@ with col1:
             help="Enter the finished square footage needed"
         )
 
+    with config_col2:
         # Filter materials to only show those with enough combined material (including waste factor)
         sq_with_waste_needed = req_sqft * WASTE_FACTOR
         df_adequate = df_grouped[df_grouped['On Hand Qty'] >= sq_with_waste_needed].copy() if not df_grouped.empty else pd.DataFrame()
         slab_options = df_adequate['Full_Name'].unique().tolist() if not df_adequate.empty else []
 
-        # Show availability info
-        if not df_adequate.empty:
-            st.caption(f"✓ {len(slab_options)} material(s) available with {sq_with_waste_needed:.0f} sf needed (incl. waste)")
-        else:
-            st.warning(f"No materials have {sq_with_waste_needed:.0f} sf required")
+        sel_slab = st.selectbox(
+            "Select Material",
+            slab_options if slab_options else ["No materials available"],
+            help="Choose material from available inventory"
+        )
 
-        sel_slab = st.selectbox("Select Material", slab_options if slab_options else ["No materials available"], label_visibility="visible")
+    # Show availability info
+    if not df_adequate.empty:
+        st.caption(f"✓ {len(slab_options)} material(s) available with {sq_with_waste_needed:.0f} sf needed (incl. waste)")
+    else:
+        st.warning(f"⚠️ No materials have {sq_with_waste_needed:.0f} sf required")
 
-    # Margin Analysis Container
-    if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
-        row = df_adequate[df_adequate['Full_Name'] == sel_slab].iloc[0]
-        costs = calculate_cost(row['Unit_Cost_Internal'], req_sqft)
+st.markdown("<div style='margin: 1.5rem 0;'></div>", unsafe_allow_html=True)
 
-        with st.container(border=True):
-            st.markdown('<span class="card-title">🔐 Margin Analysis (Internal)</span>', unsafe_allow_html=True)
-
-            margin_class = get_margin_class(costs['margin_pct'])
-
-            # Key metrics
-            mc1, mc2, mc3 = st.columns(3)
-            mc1.metric("IB Cost", f"${costs['ib_transfer_cost']:,.2f}")
-            mc2.metric("Gross Profit", f"${costs['gross_profit']:,.2f}")
-
-            # Margin with color coding
-            mc3.markdown(f"""
-<div style="text-align: center;">
-<div style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 0.5rem;">Margin</div>
-<div class="{margin_class}" style="font-size: 2rem; font-weight: 700; line-height: 1.2;">{costs['margin_pct']:.1f}%</div>
-</div>
-""", unsafe_allow_html=True)
-
-            # Margin progress bar
-            margin_color_class = "margin-excellent" if costs['margin_pct'] >= 30 else ("margin-good" if costs['margin_pct'] >= 20 else "margin-low")
-            st.markdown(f"""
-<div class="margin-bar-container">
-<div class="margin-bar-fill {margin_color_class}" style="width: {min(costs['margin_pct'], 100)}%;"></div>
-</div>
-""", unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Cost breakdown - simplified
-            st.markdown(f"**Unit Cost:** ${row['Unit_Cost_Internal']:,.2f}/sf | **Fab:** ${FABRICATION_COST_PER_SQFT}/sf | **Install:** ${INSTALL_COST_PER_SQFT}/sf")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Margin guidance
-            if costs['margin_pct'] >= 30:
-                st.success("✅ Great margin - standard pricing recommended")
-            elif costs['margin_pct'] >= 20:
-                st.info("📊 Acceptable margin - some negotiation room available")
-            else:
-                st.warning("⚠️ Below target margin (<20%) - limit discounts")
-
-# RIGHT COLUMN - Live Context & Pricing
+# --- MAIN DASHBOARD (Two-Column) ---
 if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
     row = df_adequate[df_adequate['Full_Name'] == sel_slab].iloc[0]
     costs = calculate_cost(row['Unit_Cost_Internal'], req_sqft)
@@ -908,7 +837,10 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
     available_qty = row['On Hand Qty']
     sq_with_waste = req_sqft * WASTE_FACTOR
 
-    with col2:
+    col1, col2 = st.columns(2)
+
+    # LEFT COLUMN - Inventory Details
+    with col1:
         # Availability Warning
         if sq_with_waste > available_qty:
             st.markdown(f"""
@@ -925,9 +857,9 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
 
         # Live Inventory Context Container
         with st.container(border=True):
-            st.markdown('<span class="card-title">📦 Live Inventory Context</span>', unsafe_allow_html=True)
+            st.markdown('<span class="card-title">📦 Inventory Details</span>', unsafe_allow_html=True)
 
-            # Material details - use metrics instead of custom HTML
+            # Material details
             inv_col1, inv_col2, inv_col3 = st.columns(3)
             inv_col1.metric("Brand", row['Brand'])
             inv_col2.metric("Color", row['Color'])
@@ -967,7 +899,9 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
                     for idx, slab in enumerate(slab_details[len(slabs_needed):], len(slabs_needed) + 1):
                         st.caption(f"{idx}. {slab['variant']} - {slab['qty']:.0f} sf")
 
-        # Large Price Display
+    # RIGHT COLUMN - Pricing & Analytics
+    with col2:
+        # Large Price Display (Hero)
         tax_amt = costs['subtotal_after_discount'] * TAX_RATE
         total = costs['subtotal_after_discount'] + tax_amt
 
@@ -993,83 +927,55 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
             price_col2.metric("Fabrication", f"${costs['fab_total']:,.2f}")
             price_col3.metric("Installation", f"${costs['install_total']:,.2f}")
 
-        # Client Quote Generator Container
-        with st.container(border=True):
-            st.markdown('<span class="card-title">📧 Generate Client Quote</span>', unsafe_allow_html=True)
+    st.markdown("<div style='margin: 2rem 0;'></div>", unsafe_allow_html=True)
 
-            discount_text = ""
-            if costs['discount_pct'] > 0:
-                discount_text = f"\n🎉 Volume Discount Applied: {costs['discount_pct']*100:.0f}% off!"
+    # MARGIN ANALYSIS (Internal - At Bottom)
+    with st.expander("🔐 Margin Analysis (Internal Only)", expanded=False):
+        margin_class = get_margin_class(costs['margin_pct'])
 
-            email_body = f"""Hi,
+        # Key metrics
+        mc1, mc2, mc3 = st.columns(3)
+        mc1.metric("IB Cost", f"${costs['ib_transfer_cost']:,.2f}")
+        mc2.metric("Gross Profit", f"${costs['gross_profit']:,.2f}")
 
-I found a clearance option for your project:
+        # Margin with color coding
+        mc3.markdown(f"""
+<div style="text-align: center;">
+<div style="font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 0.5rem;">Margin</div>
+<div class="{margin_class}" style="font-size: 2rem; font-weight: 700; line-height: 1.2;">{costs['margin_pct']:.1f}%</div>
+</div>
+""", unsafe_allow_html=True)
 
-Material: {row['Brand']} {row['Color']}
-Thickness: {row['Thickness']}
-{discount_text}
-Total Installed Price: ${total:,.2f}
-(Based on {req_sqft:.0f} sq ft finished area)
+        # Margin progress bar
+        margin_color_class = "margin-excellent" if costs['margin_pct'] >= 30 else ("margin-good" if costs['margin_pct'] >= 20 else "margin-low")
+        st.markdown(f"""
+<div class="margin-bar-container">
+<div class="margin-bar-fill {margin_color_class}" style="width: {min(costs['margin_pct'], 100)}%;"></div>
+</div>
+""", unsafe_allow_html=True)
 
-This is a limited-availability clearance piece. Let me know if you'd like to secure it!
+        st.markdown("<br>", unsafe_allow_html=True)
 
-Best regards"""
+        # Cost breakdown
+        st.markdown(f"**Unit Cost:** ${row['Unit_Cost_Internal']:,.2f}/sf | **Fab:** ${FABRICATION_COST_PER_SQFT}/sf | **Install:** ${INSTALL_COST_PER_SQFT}/sf | **IB Margin:** {IB_MARGIN*100:.0f}%")
 
-            st.text_area("Email Template", email_body, height=280, key="email_copy")
+        st.markdown("<br>", unsafe_allow_html=True)
 
-            if st.button("📋 Copy to Clipboard", use_container_width=True, type="primary"):
-                st.code(email_body, language=None)
-                st.success("✅ Email copied! Use Ctrl+C to copy from the box above.")
+        # Margin guidance
+        if costs['margin_pct'] >= 30:
+            st.success("✅ Great margin - standard pricing recommended")
+        elif costs['margin_pct'] >= 20:
+            st.info("📊 Acceptable margin - some negotiation room available")
+        else:
+            st.warning("⚠️ Below target margin (<20%) - limit discounts")
 
 else:
-    with col2:
-        st.markdown("""
-        <div style="background: #fef3c7; padding: 1.5rem; border-radius: 6px; border-left: 3px solid #d97706; margin: 1.5rem 0;">
-            <span style="color: #92400e;">⚠️ <strong>No materials available for this project size.</strong><br>
-            Try reducing the project square footage or check if you need to order new material.</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-# --- COMPARISON TABLE ---
-if st.session_state.comparison_slabs:
-    st.markdown("<div style='margin: 2.5rem 0 1.5rem 0;'></div>", unsafe_allow_html=True)
     st.markdown("""
-    <div style="background: white; padding: 1.5rem; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 1.5rem;">
-        <h2 style="margin: 0; font-size: 1.25rem; font-weight: 600; color: #1e293b;">
-            📊 Slab Comparison
-        </h2>
+    <div style="background: #fef3c7; padding: 1.5rem; border-radius: 6px; border-left: 3px solid #d97706; margin: 1.5rem 0;">
+        <span style="color: #92400e;">⚠️ <strong>No materials available for this project size.</strong><br>
+        Try reducing the project square footage or check if you need to order new material.</span>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Clear comparison button
-    if st.button("🗑️ Clear Comparison"):
-        st.session_state.comparison_slabs = []
-        st.rerun()
-    
-    comp_cols = st.columns(len(st.session_state.comparison_slabs))
-
-    for idx, slab_name in enumerate(st.session_state.comparison_slabs):
-        if slab_name in df_grouped['Full_Name'].values:
-            slab_row = df_grouped[df_grouped['Full_Name'] == slab_name].iloc[0]
-            slab_costs = calculate_cost(slab_row['Unit_Cost_Internal'], req_sqft)
-            slab_total = slab_costs['subtotal_after_discount'] * (1 + TAX_RATE)
-            margin_class = get_margin_class(slab_costs['margin_pct'])
-
-            with comp_cols[idx]:
-                st.markdown(f"""
-                <div class="comparison-row">
-                    <strong>{slab_row['Brand']}</strong><br>
-                    <span style="color: #9ca3af; font-size: 0.875rem;">{slab_row['Color']}</span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st.metric("Total Price", f"${slab_total:,.2f}")
-                st.markdown(f"<span class='{margin_class}'>Margin: {slab_costs['margin_pct']:.1f}%</span>", unsafe_allow_html=True)
-                st.caption(f"Available: {slab_row['On Hand Qty']:.0f} sf ({slab_row['Slab_Count']} slabs)")
-
-                if st.button("❌ Remove", key=f"remove_{idx}"):
-                    st.session_state.comparison_slabs.remove(slab_name)
-                    st.rerun()
 
 # --- FOOTER ---
 st.markdown("<div style='margin: 3rem 0 1rem 0;'></div>", unsafe_allow_html=True)
