@@ -57,8 +57,8 @@ st.markdown("""
 
 # --- CONSTANTS ---
 INSTALL_COST_PER_SQFT = 21.0
-FABRICATION_COST_PER_SQFT = 15.0
-WASTE_FACTOR = 1.05  
+FABRICATION_COST_PER_SQFT = 16.0
+WASTE_FACTOR = 1.20
 TAX_RATE = 0.05
 
 # Pricing Controls
@@ -216,13 +216,6 @@ if df is not None:
                 <p>Incl. 5% GST</p>
             </div>
             """, unsafe_allow_html=True)
-            
-            with st.expander("🔐 Margin Analysis"):
-                st.metric("Slab Cost (Internal IB)", f"${pricing['ib_cost']:,.2f}")
-                m_color = "good-margin" if pricing['margin_pct'] >= 25 else "low-margin"
-                st.markdown(f"Gross Margin: <span class='{m_color}'>{pricing['margin_pct']:.1f}%</span>", unsafe_allow_html=True)
-                st.write(f"Customer Mat/Fab: ${pricing['customer_mat_fab']:,.2f}")
-                st.write(f"Customer Install: ${pricing['customer_ins']:,.2f}")
 
 else:
     st.error("Unable to load inventory data.")
