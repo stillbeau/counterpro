@@ -31,10 +31,10 @@ st.markdown("""
     }
 
     .card-title {
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         font-weight: 700;
         color: #1e293b;
-        margin-bottom: 1rem;
+        margin-bottom: 1.25rem;
         text-transform: uppercase;
         letter-spacing: 0.075em;
         display: block;
@@ -92,28 +92,30 @@ st.markdown("""
     .low-stock {
         background: #fee2e2;
         border-left: 3px solid #dc2626;
-        padding: 6px 10px;
-        border-radius: 0 4px 4px 0;
-        margin: 0.5rem 0;
+        padding: 8px 12px;
+        border-radius: 0 6px 6px 0;
+        margin: 0.5rem 0 1rem 0;
         color: #dc2626 !important;
-        font-size: 10px;
+        font-size: 0.95rem;
         font-weight: 500;
+        line-height: 1.6;
     }
-    
+
     .low-stock strong {
         color: #dc2626 !important;
     }
-    
+
     /* Warning style (yellow) */
     .warning-stock {
         background: #fef3c7;
         border-left: 3px solid #d97706;
-        padding: 6px 10px;
-        border-radius: 0 4px 4px 0;
-        margin: 0.5rem 0;
+        padding: 8px 12px;
+        border-radius: 0 6px 6px 0;
+        margin: 0.5rem 0 1rem 0;
         color: #92400e !important;
-        font-size: 10px;
+        font-size: 0.95rem;
         font-weight: 500;
+        line-height: 1.6;
     }
     
     /* Margin indicators - matching extension colors */
@@ -341,11 +343,19 @@ st.markdown("""
     
     /* Captions - improved size and readability */
     .stCaption, [data-testid="stCaptionContainer"] {
-        font-size: 0.95rem !important;
+        font-size: 1rem !important;
         color: #475569 !important;
         line-height: 1.6 !important;
         margin-top: 0.5rem !important;
         font-weight: 500;
+    }
+
+    /* Larger captions in inventory context */
+    [data-testid="stVerticalBlockBorderWrapper"] .stCaption,
+    [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stCaptionContainer"] {
+        font-size: 1.05rem !important;
+        font-weight: 500 !important;
+        line-height: 1.7 !important;
     }
 
     /* Fix selectbox text clipping */
@@ -811,8 +821,8 @@ st.markdown("<div style='margin: 1rem 0;'></div>", unsafe_allow_html=True)
 if 'comparison_slabs' not in st.session_state:
     st.session_state.comparison_slabs = []
 
-# Two-column layout
-col1, col2 = st.columns([1, 1])
+# Two-column layout - adjusted for better balance
+col1, col2 = st.columns([0.95, 1.05])
 
 # LEFT COLUMN - Quote Calculator
 with col1:
