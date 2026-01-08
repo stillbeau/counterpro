@@ -494,6 +494,7 @@ INSTALL_COST_PER_SQFT = 19.0
 FABRICATION_COST_PER_SQFT = 16.0
 WASTE_FACTOR = 1.20
 TAX_RATE = 0.05
+IB_MARGIN = 0.15  # 15% margin on material + fabrication for IB transfer cost
 
 # STOCK THRESHOLDS
 LOW_STOCK_THRESHOLD = 30  # sq ft
@@ -524,7 +525,8 @@ def calculate_cost(unit_cost_from_csv, project_sqft, apply_discount=True):
     mat = uc * sq_with_waste
     fab = FABRICATION_COST_PER_SQFT * sq_finished
     ins = INSTALL_COST_PER_SQFT * sq_finished
-    ib = (uc * sq_with_waste) + (FABRICATION_COST_PER_SQFT * sq_finished)
+    # IB transfer cost includes margin on material + fabrication
+    ib = ((uc * sq_with_waste) + (FABRICATION_COST_PER_SQFT * sq_finished)) * (1 + IB_MARGIN)
     
     subtotal = mat + fab + ins
     discount_amt = subtotal * discount_pct
