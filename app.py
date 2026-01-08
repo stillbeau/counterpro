@@ -719,8 +719,10 @@ def calculate_cost(unit_cost_from_csv, project_sqft, apply_discount=True):
     mat = uc * sq_with_waste
     fab = FABRICATION_COST_PER_SQFT * sq_finished
     ins = INSTALL_COST_PER_SQFT * sq_finished
-    # IB transfer cost includes margin on material + fabrication
-    ib = ((uc * sq_with_waste) + (FABRICATION_COST_PER_SQFT * sq_finished)) * (1 + IB_MARGIN)
+    # IB transfer cost: Material + Fab should be 15% greater than IB
+    # So: IB × 1.15 = Material + Fab
+    # Therefore: IB = (Material + Fab) / 1.15
+    ib = ((uc * sq_with_waste) + (FABRICATION_COST_PER_SQFT * sq_finished)) / (1 + IB_MARGIN)
     
     subtotal = mat + fab + ins
     discount_amt = subtotal * discount_pct
