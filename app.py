@@ -143,6 +143,13 @@ st.title("🧱 Dead Stock Sales Tool")
 
 df = fetch_data()
 if df is not None:
+    # Group by Product Variant and calculate totals
+    grouped_df = df.groupby('Product Variant').agg({
+        'On Hand Qty': 'sum',
+        'Serialized On Hand Cost': 'sum'
+    }).reset_index()
+    grouped_df['Unit_Cost'] = grouped_df['Serialized On Hand Cost'] / grouped_df['On Hand Qty']
+
     # Main Config Card
     with st.container(border=True):
         st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
@@ -150,21 +157,21 @@ if df is not None:
         with col_a:
             sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0)
         with col_b:
-            # Create display options with sqft available
-            df_display = df.copy()
-            df_display['display_name'] = df_display.apply(
+            # Create display options with total sqft for grouped materials
+            grouped_df['display_name'] = grouped_df.apply(
                 lambda row: f"{row['Product Variant']} ({row['On Hand Qty']:.1f} sf)", axis=1
             )
 
             # Create a mapping for reverse lookup
-            display_to_variant = dict(zip(df_display['display_name'], df_display['Product Variant']))
+            display_to_variant = dict(zip(grouped_df['display_name'], grouped_df['Product Variant']))
 
-            selected_display = st.selectbox("Select Slab", df_display['display_name'].unique())
+            selected_display = st.selectbox("Select Slab", grouped_df['display_name'].unique())
             selected_variant = display_to_variant[selected_display]
 
     # Results
     if selected_variant:
-        slab_data = df[df['Product Variant'] == selected_variant].iloc[0]
+        slab_data = grouped_df[grouped_df['Product Variant'] == selected_variant].iloc[0]
+        all_slabs = df[df['Product Variant'] == selected_variant]  # Get all individual slabs for this variant
         pricing = calculate_cost(slab_data['Unit_Cost'], sqft)
         
         c1, c2 = st.columns([1, 1])
@@ -175,16 +182,21 @@ if df is not None:
                 if slab_data['On Hand Qty'] < (sqft * WASTE_FACTOR):
                     st.markdown(f'<div class="low-stock">⚠️ Insufficient Stock: Need {sqft * WASTE_FACTOR:.1f}sf, have {slab_data["On Hand Qty"]:.1f}sf</div>', unsafe_allow_html=True)
 
-                # Display serial number if available
+                # Display all serial numbers for this variant
                 serial_num_cols = ['Serial Number', 'SKU', 'Item Code', 'Product SKU', 'Serialized Inventory']
-                serial_number = None
+                serial_numbers = []
                 for col in serial_num_cols:
-                    if col in slab_data.index and pd.notna(slab_data[col]):
-                        serial_number = slab_data[col]
-                        break
+                    if col in all_slabs.columns:
+                        for serial in all_slabs[col]:
+                            if pd.notna(serial) and serial not in serial_numbers:
+                                serial_numbers.append(str(serial))
+                        if serial_numbers:
+                            break
 
-                if serial_number:
-                    st.metric("Serial Number", serial_number)
+                if serial_numbers:
+                    st.markdown("**Serial Numbers:**")
+                    for serial in serial_numbers:
+                        st.write(f"• {serial}")
 
                 st.metric("Available Qty", f"{slab_data['On Hand Qty']:.1f} sf")
 
