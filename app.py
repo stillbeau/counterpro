@@ -24,19 +24,30 @@ st.markdown("""
     .dashboard-card {
         background: white;
         border-radius: 12px;
-        padding: 1.5rem;
+        padding: 1.75rem;
         box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
         margin-bottom: 1.5rem;
+        border: 1px solid #f1f5f9;
     }
 
     .card-title {
-        font-size: 1rem;
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.075em;
+        line-height: 1.2;
+    }
+
+    .dashboard-card p, .dashboard-card span, .dashboard-card div {
+        line-height: 1.6;
+        font-size: 0.95rem;
+    }
+
+    .dashboard-card strong {
         font-weight: 600;
         color: #1e293b;
-        margin-bottom: 1rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-size: 0.875rem;
     }
 
     /* Ensure all text is dark and readable */
@@ -54,12 +65,17 @@ st.markdown("""
     [data-testid="stMetricValue"] {
         color: #1e293b !important;
         font-weight: 700 !important;
+        font-size: 1.75rem !important;
+        line-height: 1.2 !important;
     }
-    
+
     [data-testid="stMetricLabel"] {
         color: #64748b !important;
-        font-size: 10px !important;
+        font-size: 0.75rem !important;
         text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        font-weight: 600 !important;
+        margin-bottom: 0.25rem !important;
     }
     
     /* Card styling - matching extension cards */
@@ -119,18 +135,22 @@ st.markdown("""
     .comparison-row {
         background: #ffffff;
         border-radius: 6px;
-        padding: 10px;
+        padding: 12px;
         margin: 0.5rem 0;
         border: 1px solid #e2e8f0;
     }
-    
+
     .comparison-row strong {
         color: #1e293b !important;
-        font-size: 12px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        line-height: 1.4;
     }
-    
+
     .comparison-row span {
         color: #64748b !important;
+        font-size: 0.85rem;
+        line-height: 1.5;
     }
     
     /* Stock badges - matching extension status pills */
@@ -321,7 +341,16 @@ st.markdown("""
     /* Captions */
     .stCaption, small {
         color: #64748b !important;
-        font-size: 10px;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        font-weight: 500;
+    }
+
+    /* Improved caption readability */
+    [data-testid="stCaptionContainer"] {
+        color: #64748b !important;
+        font-size: 0.8rem !important;
+        line-height: 1.5 !important;
     }
     
     /* KPI style badges */
@@ -360,24 +389,32 @@ st.markdown("""
     /* Large price display */
     .large-price {
         text-align: center;
-        padding: 2rem;
+        padding: 2.5rem;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 12px;
         color: white !important;
         margin: 1.5rem 0;
+        box-shadow: 0 10px 25px -5px rgba(102, 126, 234, 0.4);
     }
 
     .large-price h1 {
         color: white !important;
-        font-size: 3rem !important;
-        margin: 0 !important;
+        font-size: 3.5rem !important;
+        margin: 0.5rem 0 !important;
         font-weight: 700 !important;
+        line-height: 1.2 !important;
+        letter-spacing: -0.02em !important;
     }
 
     .large-price p {
-        color: rgba(255,255,255,0.9) !important;
+        color: white !important;
         font-size: 0.875rem !important;
-        margin-top: 0.5rem !important;
+        margin: 0.25rem 0 !important;
+        line-height: 1.6 !important;
+    }
+
+    .large-price * {
+        color: white !important;
     }
 
     /* Margin progress bar */
@@ -402,7 +439,7 @@ st.markdown("""
 
     /* Compact stat */
     .stat-item {
-        padding: 0.75rem 0;
+        padding: 0.875rem 0;
         border-bottom: 1px solid #f1f5f9;
     }
 
@@ -412,16 +449,19 @@ st.markdown("""
 
     .stat-label {
         font-size: 0.75rem;
-        color: #64748b;
+        color: #64748b !important;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.375rem;
+        font-weight: 600;
+        line-height: 1.2;
     }
 
     .stat-value {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: #1e293b;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1e293b !important;
+        line-height: 1.2;
     }
 
     /* Compact inputs */
@@ -885,11 +925,26 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
         # Material details
         inv_col1, inv_col2, inv_col3 = st.columns(3)
         with inv_col1:
-            st.markdown(f"**Brand**\n{row['Brand']}", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style='text-align: center;'>
+                <div style='font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 0.25rem;'>Brand</div>
+                <div style='font-size: 1rem; font-weight: 600; color: #1e293b;'>{row['Brand']}</div>
+            </div>
+            """, unsafe_allow_html=True)
         with inv_col2:
-            st.markdown(f"**Color**\n{row['Color']}", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style='text-align: center;'>
+                <div style='font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 0.25rem;'>Color</div>
+                <div style='font-size: 1rem; font-weight: 600; color: #1e293b;'>{row['Color']}</div>
+            </div>
+            """, unsafe_allow_html=True)
         with inv_col3:
-            st.markdown(f"**Thickness**\n{row['Thickness']}", unsafe_allow_html=True)
+            st.markdown(f"""
+            <div style='text-align: center;'>
+                <div style='font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-bottom: 0.25rem;'>Thickness</div>
+                <div style='font-size: 1rem; font-weight: 600; color: #1e293b;'>{row['Thickness']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         st.markdown("<div style='margin: 1rem 0; border-top: 1px solid #e2e8f0;'></div>", unsafe_allow_html=True)
 
@@ -933,16 +988,16 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
         tax_amt = costs['subtotal_after_discount'] * TAX_RATE
         total = costs['subtotal_after_discount'] + tax_amt
 
-        discount_badge = ""
+        discount_text = ""
         if costs['discount_pct'] > 0:
-            discount_badge = f"<p style='margin: 0;'>🎉 {costs['discount_pct']*100:.0f}% Volume Discount Applied</p>"
+            discount_text = f"<p style='margin: 0.5rem 0; color: white; font-size: 0.9rem;'>🎉 {costs['discount_pct']*100:.0f}% Volume Discount Applied</p>"
 
         st.markdown(f"""
         <div class="large-price">
-            <p style='margin: 0; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.9;'>Total Installed Price</p>
-            <h1>${total:,.2f}</h1>
-            {discount_badge}
-            <p style='margin: 0.5rem 0 0 0; opacity: 0.8;'>Based on {req_sqft:.0f} sf finished (includes 5% tax)</p>
+            <p style='margin: 0; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.9; color: white;'>Total Installed Price</p>
+            <h1 style='color: white; font-size: 3rem; margin: 0.5rem 0; font-weight: 700;'>${total:,.2f}</h1>
+            {discount_text}
+            <p style='margin: 0.5rem 0 0 0; opacity: 0.85; color: white; font-size: 0.875rem;'>Based on {req_sqft:.0f} sf finished (includes 5% tax)</p>
         </div>
         """, unsafe_allow_html=True)
 
