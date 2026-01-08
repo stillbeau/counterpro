@@ -217,5 +217,10 @@ if df is not None:
             </div>
             """, unsafe_allow_html=True)
 
+            with st.expander("💰 Cost Breakdown"):
+                st.metric("Slab Cost (Internal IB)", f"${pricing['ib_cost']:,.2f}")
+                st.write(f"Customer Mat/Fab: ${pricing['customer_mat_fab']:,.2f}")
+                st.write(f"Customer Install: ${pricing['customer_ins']:,.2f}")
+
 else:
     st.error("Unable to load inventory data.")
