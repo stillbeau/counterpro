@@ -37,7 +37,7 @@ st.markdown("""
         margin-bottom: 1.25rem;
         text-transform: uppercase;
         letter-spacing: 0.075em;
-        line-height: 1.2;
+        line-height: 1.5;
     }
 
     .dashboard-card p, .dashboard-card span, .dashboard-card div {
@@ -65,8 +65,9 @@ st.markdown("""
     [data-testid="stMetricValue"] {
         color: #1e293b !important;
         font-weight: 700 !important;
-        font-size: 1.75rem !important;
-        line-height: 1.2 !important;
+        font-size: 1.8rem !important;
+        line-height: 1.6 !important;
+        padding-bottom: 5px !important;
     }
 
     [data-testid="stMetricLabel"] {
@@ -389,7 +390,7 @@ st.markdown("""
     /* Large price display */
     .large-price {
         text-align: center;
-        padding: 2.5rem;
+        padding: 2.5rem 1rem;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         border-radius: 12px;
         color: white !important;
@@ -402,15 +403,15 @@ st.markdown("""
         font-size: 3.5rem !important;
         margin: 0.5rem 0 !important;
         font-weight: 700 !important;
-        line-height: 1.2 !important;
+        line-height: 1.1 !important;
         letter-spacing: -0.02em !important;
     }
 
     .large-price p {
         color: white !important;
-        font-size: 0.875rem !important;
+        font-size: 0.9rem !important;
         margin: 0.25rem 0 !important;
-        line-height: 1.6 !important;
+        opacity: 0.9;
     }
 
     .large-price * {
@@ -993,13 +994,13 @@ if sel_slab and sel_slab != "No materials available" and len(slab_options) > 0:
             discount_text = f"<p style='margin: 0.5rem 0; color: white; font-size: 0.9rem;'>🎉 {costs['discount_pct']*100:.0f}% Volume Discount Applied</p>"
 
         st.markdown(f"""
-        <div class="large-price">
-            <p style='margin: 0; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.9; color: white;'>Total Installed Price</p>
-            <h1 style='color: white; font-size: 3rem; margin: 0.5rem 0; font-weight: 700;'>${total:,.2f}</h1>
-            {discount_text}
-            <p style='margin: 0.5rem 0 0 0; opacity: 0.85; color: white; font-size: 0.875rem;'>Based on {req_sqft:.0f} sf finished (includes 5% tax)</p>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="large-price">
+<p style='margin: 0; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.9; color: white;'>Total Installed Price</p>
+<h1 style='color: white; font-size: 3rem; margin: 0.5rem 0; font-weight: 700;'>${total:,.2f}</h1>
+{discount_text}
+<p style='margin: 0.5rem 0 0 0; opacity: 0.85; color: white; font-size: 0.875rem;'>Based on {req_sqft:.0f} sf finished (includes 5% tax)</p>
+</div>
+""", unsafe_allow_html=True)
 
         # Price breakdown metrics
         st.markdown('<div class="dashboard-card"><div class="card-title">💰 Price Components</div>', unsafe_allow_html=True)
