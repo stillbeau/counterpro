@@ -148,7 +148,7 @@ if df is not None:
         st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
         col_a, col_b = st.columns(2)
         with col_a:
-            sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0)
+            sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0)
         with col_b:
             # Create display options with sqft available
             df_display = df.copy()
@@ -203,7 +203,6 @@ if df is not None:
                 st.markdown(f"Gross Margin: <span class='{m_color}'>{pricing['margin_pct']:.1f}%</span>", unsafe_allow_html=True)
                 st.write(f"Customer Mat/Fab: ${pricing['customer_mat_fab']:,.2f}")
                 st.write(f"Customer Install: ${pricing['customer_ins']:,.2f}")
-                st.write(f"Spread Check: Material & Fab is {IB_TO_CUSTOMER_MARKUP:.0%} of IB.")
 
 else:
     st.error("Unable to load inventory data.")
