@@ -339,10 +339,8 @@ DATA_SOURCES = [
 ]
 
 # PRICING CONSTANTS
-MARKUP_FACTOR = 1.10
 INSTALL_COST_PER_SQFT = 19.0
 FABRICATION_COST_PER_SQFT = 16.0
-IB_MATERIAL_MARKUP = 1.05
 WASTE_FACTOR = 1.20
 TAX_RATE = 0.05
 
@@ -372,10 +370,10 @@ def calculate_cost(unit_cost_from_csv, project_sqft, apply_discount=True):
                 break
     
     sq_with_waste = sq_finished * WASTE_FACTOR
-    mat = uc * MARKUP_FACTOR * sq_with_waste
+    mat = uc * sq_with_waste
     fab = FABRICATION_COST_PER_SQFT * sq_finished
     ins = INSTALL_COST_PER_SQFT * sq_finished
-    ib = ((uc * IB_MATERIAL_MARKUP) * sq_with_waste) + (FABRICATION_COST_PER_SQFT * sq_finished)
+    ib = (uc * sq_with_waste) + (FABRICATION_COST_PER_SQFT * sq_finished)
     
     subtotal = mat + fab + ins
     discount_amt = subtotal * discount_pct
@@ -873,7 +871,7 @@ if sel_slab and sel_slab != "No materials available for this size" and len(slab_
             st.markdown("**Cost Breakdown:**")
             breakdown_cols = st.columns(4)
             breakdown_cols[0].write(f"Unit Cost: ${row['Unit_Cost_Internal']:,.2f}/sf")
-            breakdown_cols[1].write(f"Material Markup: {MARKUP_FACTOR}x")
+            breakdown_cols[1].write(f"Waste Factor: {WASTE_FACTOR}x")
             breakdown_cols[2].write(f"Fab Rate: ${FABRICATION_COST_PER_SQFT}/sf")
             breakdown_cols[3].write(f"Install Rate: ${INSTALL_COST_PER_SQFT}/sf")
             
