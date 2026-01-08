@@ -143,11 +143,6 @@ st.title("🧱 Dead Stock Sales Tool")
 
 df = fetch_data()
 if df is not None:
-    # Filter Sidebar
-    with st.sidebar:
-        st.header("Filters")
-        search = st.text_input("Search Material", "")
-        
     # Main Config Card
     with st.container(border=True):
         st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
@@ -155,9 +150,17 @@ if df is not None:
         with col_a:
             sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0)
         with col_b:
-            if search:
-                df = df[df['Product Variant'].str.contains(search, case=False)]
-            selected_variant = st.selectbox("Select Slab", df['Product Variant'].unique())
+            # Create display options with sqft available
+            df_display = df.copy()
+            df_display['display_name'] = df_display.apply(
+                lambda row: f"{row['Product Variant']} ({row['On Hand Qty']:.1f} sf)", axis=1
+            )
+
+            # Create a mapping for reverse lookup
+            display_to_variant = dict(zip(df_display['display_name'], df_display['Product Variant']))
+
+            selected_display = st.selectbox("Select Slab", df_display['display_name'].unique())
+            selected_variant = display_to_variant[selected_display]
 
     # Results
     if selected_variant:
@@ -171,9 +174,19 @@ if df is not None:
                 st.markdown('<span class="card-title">Inventory Context</span>', unsafe_allow_html=True)
                 if slab_data['On Hand Qty'] < (sqft * WASTE_FACTOR):
                     st.markdown(f'<div class="low-stock">⚠️ Insufficient Stock: Need {sqft * WASTE_FACTOR:.1f}sf, have {slab_data["On Hand Qty"]:.1f}sf</div>', unsafe_allow_html=True)
-                
+
+                # Display serial number if available
+                serial_num_cols = ['Serial Number', 'SKU', 'Item Code', 'Product SKU', 'Serialized Inventory']
+                serial_number = None
+                for col in serial_num_cols:
+                    if col in slab_data.index and pd.notna(slab_data[col]):
+                        serial_number = slab_data[col]
+                        break
+
+                if serial_number:
+                    st.metric("Serial Number", serial_number)
+
                 st.metric("Available Qty", f"{slab_data['On Hand Qty']:.1f} sf")
-                st.metric("Slab Cost (Internal IB)", f"${pricing['ib_cost']:,.2f}")
 
         with c2:
             st.markdown(f"""
@@ -185,6 +198,7 @@ if df is not None:
             """, unsafe_allow_html=True)
             
             with st.expander("🔐 Margin Analysis"):
+                st.metric("Slab Cost (Internal IB)", f"${pricing['ib_cost']:,.2f}")
                 m_color = "good-margin" if pricing['margin_pct'] >= 25 else "low-margin"
                 st.markdown(f"Gross Margin: <span class='{m_color}'>{pricing['margin_pct']:.1f}%</span>", unsafe_allow_html=True)
                 st.write(f"Customer Mat/Fab: ${pricing['customer_mat_fab']:,.2f}")
