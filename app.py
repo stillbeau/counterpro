@@ -118,6 +118,36 @@ def calculate_cost(unit_cost, project_sqft):
         "total_with_tax": subtotal * (1 + TAX_RATE)
     }
 
+def parse_product_variant(variant_str):
+    """Parse Product Variant to extract Brand, Color, and Thickness"""
+    try:
+        # Remove leading number (e.g., "17 - ")
+        cleaned = re.sub(r'^\d+\s*-\s*', '', str(variant_str))
+
+        # Extract brand (before first parenthesis or up to certain keywords)
+        brand_match = re.match(r'^([A-Za-z\s&]+)', cleaned)
+        brand = brand_match.group(1).strip() if brand_match else "Unknown"
+
+        # Extract thickness (2cm, 3cm, 1.2cm, etc.)
+        thickness_match = re.search(r'(\d+\.?\d*cm)', cleaned, re.IGNORECASE)
+        thickness = thickness_match.group(1) if thickness_match else ""
+
+        # Remove codes in parentheses and thickness to isolate color
+        color_str = re.sub(r'\([^)]*\)', '', cleaned)  # Remove (ABB), (DISCONTINUED), etc.
+        color_str = re.sub(r'#\S+', '', color_str)     # Remove #4130, etc.
+        color_str = re.sub(r'\d+\.?\d*cm', '', color_str, flags=re.IGNORECASE)  # Remove thickness
+        color_str = re.sub(r'\s+', ' ', color_str).strip()  # Clean whitespace
+
+        # Remove brand from color string
+        if brand in color_str:
+            color_str = color_str.replace(brand, '').strip()
+
+        color = color_str if color_str else "Unknown"
+
+        return brand, color, thickness
+    except:
+        return "Unknown", str(variant_str), ""
+
 def fetch_data():
     """Fetches fresh inventory data from Google Sheets (no caching - always up-to-date)"""
     all_dfs = []
@@ -135,6 +165,13 @@ def fetch_data():
     df = pd.concat(all_dfs, ignore_index=True)
     df = df[df['On Hand Qty'] > 0].copy()
     df['Unit_Cost'] = df['Serialized On Hand Cost'] / df['On Hand Qty']
+
+    # Parse product variants to extract structured data
+    parsed = df['Product Variant'].apply(parse_product_variant)
+    df['Brand'] = parsed.apply(lambda x: x[0])
+    df['Color'] = parsed.apply(lambda x: x[1])
+    df['Thickness'] = parsed.apply(lambda x: x[2])
+
     return df
 
 # --- UI EXECUTION ---
@@ -145,9 +182,57 @@ if df is not None:
     # Group by Product Variant and calculate totals
     grouped_df = df.groupby('Product Variant').agg({
         'On Hand Qty': 'sum',
-        'Serialized On Hand Cost': 'sum'
+        'Serialized On Hand Cost': 'sum',
+        'Brand': 'first',
+        'Color': 'first',
+        'Thickness': 'first'
     }).reset_index()
     grouped_df['Unit_Cost'] = grouped_df['Serialized On Hand Cost'] / grouped_df['On Hand Qty']
+
+    # SIDEBAR FILTERS
+    with st.sidebar:
+        st.markdown("### 🔍 Filters")
+
+        # Brand filter
+        all_brands = sorted(grouped_df['Brand'].unique())
+        selected_brands = st.multiselect(
+            "Brand",
+            options=all_brands,
+            default=all_brands,
+            help="Select one or more brands"
+        )
+
+        # Thickness filter
+        all_thickness = sorted(grouped_df['Thickness'].unique(), reverse=True)
+        selected_thickness = st.multiselect(
+            "Thickness",
+            options=all_thickness,
+            default=all_thickness,
+            help="Select one or more thickness options"
+        )
+
+        # Search box
+        search_term = st.text_input(
+            "🔎 Search Colors",
+            placeholder="Type to search...",
+            help="Search by color name"
+        )
+
+    # Apply filters
+    filtered_df = grouped_df.copy()
+
+    if selected_brands:
+        filtered_df = filtered_df[filtered_df['Brand'].isin(selected_brands)]
+
+    if selected_thickness:
+        filtered_df = filtered_df[filtered_df['Thickness'].isin(selected_thickness)]
+
+    if search_term:
+        filtered_df = filtered_df[
+            filtered_df['Color'].str.contains(search_term, case=False, na=False) |
+            filtered_df['Brand'].str.contains(search_term, case=False, na=False) |
+            filtered_df['Product Variant'].str.contains(search_term, case=False, na=False)
+        ]
 
     # Main Config Card
     with st.container(border=True):
@@ -156,22 +241,19 @@ if df is not None:
         with col_a:
             sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0)
         with col_b:
-            # Show all materials with any available stock
-            available_df = grouped_df.copy()
-
-            # Create display options with total sqft for grouped materials
-            available_df['display_name'] = available_df.apply(
-                lambda row: f"{row['Product Variant']} ({row['On Hand Qty']:.1f} sf)", axis=1
+            # Create clean display names using parsed data
+            filtered_df['display_name'] = filtered_df.apply(
+                lambda row: f"{row['Brand']} {row['Color']} {row['Thickness']} ({row['On Hand Qty']:.1f} sf)", axis=1
             )
 
             # Create a mapping for reverse lookup
-            display_to_variant = dict(zip(available_df['display_name'], available_df['Product Variant']))
+            display_to_variant = dict(zip(filtered_df['display_name'], filtered_df['Product Variant']))
 
-            if len(available_df) > 0:
-                selected_display = st.selectbox("Select Slab", available_df['display_name'].unique())
+            if len(filtered_df) > 0:
+                selected_display = st.selectbox("Select Slab", sorted(filtered_df['display_name'].unique()))
                 selected_variant = display_to_variant[selected_display]
             else:
-                st.warning("No materials available in inventory.")
+                st.warning("No materials match your filters. Try adjusting the filters above.")
                 selected_variant = None
 
     # Results
