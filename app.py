@@ -213,16 +213,49 @@ if df is not None:
     }).reset_index()
     grouped_df['Unit_Cost'] = grouped_df['Serialized On Hand Cost'] / grouped_df['On Hand Qty']
 
+    # Main Config Card - Get sqft first (moved before sidebar so we can use it for dynamic budget range)
+    with st.container(border=True):
+        st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
+        sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
+
     # SIDEBAR FILTERS
     with st.sidebar:
         st.markdown("### 🔍 Filters")
 
-        # Budget Range Slider
+        # Sink Selection (moved before budget slider so we can use it in price calculations)
+        st.markdown("### 🚰 Sink Selection")
+        selected_sink = st.selectbox(
+            "Select Sink Model",
+            options=list(SINK_OPTIONS.keys()),
+            help="Choose a sink to include in the total price"
+        )
+        sink_price = SINK_OPTIONS[selected_sink]
+
+        st.markdown("---")
+
+        # Calculate dynamic budget range based on current sqft and sink
+        # Calculate prices for all slabs with sufficient stock
+        temp_filtered = grouped_df[grouped_df['On Hand Qty'] >= (sqft * WASTE_FACTOR)].copy()
+        if len(temp_filtered) > 0:
+            temp_filtered['_calc_price'] = temp_filtered['Unit_Cost'].apply(
+                lambda uc: calculate_cost(uc, sqft, sink_price)['total_with_tax']
+            )
+            min_price = int(temp_filtered['_calc_price'].min())
+            max_price = int(temp_filtered['_calc_price'].max())
+            # Round to nearest 100 for cleaner display
+            min_price = (min_price // 100) * 100
+            max_price = ((max_price // 100) + 1) * 100
+        else:
+            # Fallback if no slabs available
+            min_price = 500
+            max_price = 10000
+
+        # Budget Range Slider with dynamic range
         max_budget = st.slider(
             "💰 Customer Budget",
-            min_value=0,
-            max_value=10000,
-            value=10000,
+            min_value=min_price,
+            max_value=max_price,
+            value=max_price,  # Default to max to show all options
             step=100,
             help="Filter slabs by maximum customer total price"
         )
@@ -254,24 +287,12 @@ if df is not None:
             help="Search by color name"
         )
 
-        st.markdown("---")
-
-        # Sink Selection
-        st.markdown("### 🚰 Sink Selection")
-        selected_sink = st.selectbox(
-            "Select Sink Model",
-            options=list(SINK_OPTIONS.keys()),
-            help="Choose a sink to include in the total price"
-        )
-        sink_price = SINK_OPTIONS[selected_sink]
-
-    # Main Config Card - Get sqft first
-    with st.container(border=True):
-        st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
-        sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
-
     # Apply filters
     filtered_df = grouped_df.copy()
+
+    # Filter by sufficient stock first
+    required_sqft = sqft * WASTE_FACTOR
+    filtered_df = filtered_df[filtered_df['On Hand Qty'] >= required_sqft]
 
     if selected_brands:
         filtered_df = filtered_df[filtered_df['Brand'].isin(selected_brands)]
@@ -287,7 +308,7 @@ if df is not None:
         ]
 
     # Apply budget filter - calculate price for each slab and filter
-    if max_budget < 10000:  # Only filter if budget is set below max
+    if max_budget < max_price:  # Only filter if budget is set below the maximum available price
         filtered_df['_temp_price'] = filtered_df['Unit_Cost'].apply(
             lambda uc: calculate_cost(uc, sqft, sink_price)['total_with_tax']
         )
@@ -323,8 +344,6 @@ if df is not None:
         with c1:
             with st.container(border=True):
                 st.markdown('<span class="card-title">Inventory Context</span>', unsafe_allow_html=True)
-                if slab_data['On Hand Qty'] < (sqft * WASTE_FACTOR):
-                    st.markdown(f'<div class="low-stock">⚠️ Insufficient Stock: Need {sqft * WASTE_FACTOR:.1f}sf, have {slab_data["On Hand Qty"]:.1f}sf</div>', unsafe_allow_html=True)
 
                 # Display all serial numbers for this variant
                 serial_num_cols = ['Serial Number', 'SKU', 'Item Code', 'Product SKU', 'Serialized Inventory']
