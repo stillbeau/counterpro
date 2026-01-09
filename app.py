@@ -157,9 +157,8 @@ if df is not None:
         with col_a:
             sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0)
         with col_b:
-            # Filter to only show materials with sufficient stock
-            required_sqft = sqft * WASTE_FACTOR
-            available_df = grouped_df[grouped_df['On Hand Qty'] >= required_sqft].copy()
+            # Show all materials with any available stock
+            available_df = grouped_df.copy()
 
             # Create display options with total sqft for grouped materials
             available_df['display_name'] = available_df.apply(
@@ -173,7 +172,7 @@ if df is not None:
                 selected_display = st.selectbox("Select Slab", available_df['display_name'].unique())
                 selected_variant = display_to_variant[selected_display]
             else:
-                st.warning("No materials available with sufficient stock for this square footage.")
+                st.warning("No materials available in inventory.")
                 selected_variant = None
 
     # Results
