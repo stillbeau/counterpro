@@ -208,7 +208,15 @@ def fetch_data():
     return df
 
 # --- UI EXECUTION ---
-st.title("🧱 Dead Stock Sales Tool")
+# Header with logo
+col_logo, col_title = st.columns([1, 4])
+with col_logo:
+    try:
+        st.image("https://i.ibb.co/fVH4sGLk/logo.png", width=150)
+    except:
+        st.image("https://i.ibb.co/Xsj8vLX/logo.png", width=150)  # Fallback
+with col_title:
+    st.title("🧱 Dead Stock Sales Tool")
 
 # Initialize session state
 if 'comparison_tray' not in st.session_state:
