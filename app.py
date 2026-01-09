@@ -75,12 +75,25 @@ DATA_SOURCES = [
 # SINK DATA
 SINK_OPTIONS = {
     "In-Stock/No Sink": 0.00,
-    "50/50 Undermount - SKU 83742 (16 ga)": 300.00,
-    "Large Single Bowl - SKU 83744 (16 ga)": 325.00,
-    "Medium Single Bowl - SKU 83745 (18 ga)": 230.00,
-    "60/40 Undermount - SKU 83747 (16 ga)": 370.00,
-    "Large Rectangular Vanity - SKU 84020 (Porcelain)": 105.00,
-    "Large Oval Vanity - SKU 84024 (Porcelain)": 89.00
+    # Kitchen & Bar Sinks - Standard Radius
+    "50/50 Undermount Standard Radius - SKU 83742 (16 ga)": 300.00,
+    "Large Single Bowl Undermount Standard Radius - SKU 83744 (16 ga)": 325.00,
+    "Medium Single Bowl Undermount Standard Radius - SKU 83745 (18 ga)": 230.00,
+    "60/40 Undermount Standard Radius - SKU 83747 (16 ga)": 370.00,
+    "40/60 Undermount Standard Radius - SKU 83995 (16 ga)": 370.00,
+    "Large Bar Undermount Standard Radius - SKU 83993 (18 ga)": 250.00,
+    "Small Bar Undermount Standard Radius - SKU 83992 (18 ga)": 180.00,
+    # Kitchen & Bar Sinks - 15° Radius
+    "50/50 Undermount 15° Radius - SKU 83749 (18 ga)": 440.00,
+    "Large Single Bowl Undermount 15° Radius - SKU 83748 (18 ga)": 450.00,
+    "Medium Single Bowl Undermount 15° Radius - SKU 83750 (18 ga)": 400.00,
+    # Top-mount
+    "Top-mount Double Bowl Standard Radius - SKU 85446 (18 ga)": 270.00,
+    # Vanity Sinks (White Porcelain)
+    "Large Rectangular Undermount Vanity - SKU 84020 (Porcelain)": 105.00,
+    "Medium Rectangular Undermount Vanity - SKU 84022 (Porcelain)": 105.00,
+    "Large Oval Undermount Vanity - SKU 84024 (Porcelain)": 89.00,
+    "Medium Oval Undermount Vanity - SKU 84026 (Porcelain)": 89.00
 }
 
 def calculate_cost(unit_cost, project_sqft, sink_price=0.0):
