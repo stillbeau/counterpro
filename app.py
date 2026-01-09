@@ -211,10 +211,7 @@ def fetch_data():
 # Header with logo
 col_logo, col_title = st.columns([1, 4])
 with col_logo:
-    try:
-        st.image("https://i.ibb.co/fVH4sGLk/logo.png", width=150)
-    except:
-        st.image("https://i.ibb.co/Xsj8vLX/logo.png", width=150)  # Fallback
+    st.image("https://i.ibb.co/kVXQt6v4/Gemini-Generated-Image-shnzslshnzslshnz.png", width=150)
 with col_title:
     st.title("🧱 Dead Stock Sales Tool")
 
