@@ -8,10 +8,10 @@ import webbrowser
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
-    page_title="Dead Stock Sales Tool", 
-    page_icon="🧱", 
+    page_title="Dead Stock Sales Tool",
+    page_icon="🧱",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Custom CSS - Modern SaaS Dashboard Style
@@ -197,9 +197,11 @@ def fetch_data():
 # --- UI EXECUTION ---
 st.title("🧱 Dead Stock Sales Tool")
 
-# Initialize session state for comparison tray
+# Initialize session state
 if 'comparison_tray' not in st.session_state:
     st.session_state.comparison_tray = []
+if 'selected_sinks' not in st.session_state:
+    st.session_state.selected_sinks = []
 
 df = fetch_data()
 if df is not None:
@@ -213,32 +215,70 @@ if df is not None:
     }).reset_index()
     grouped_df['Unit_Cost'] = grouped_df['Serialized On Hand Cost'] / grouped_df['On Hand Qty']
 
-    # Main Config Card - Get sqft first (moved before sidebar so we can use it for dynamic budget range)
+    # PROJECT SETTINGS
     with st.container(border=True):
         st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
         sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
 
-    # SIDEBAR FILTERS
-    with st.sidebar:
-        st.markdown("### 🔍 Filters")
+    # SINK SELECTION
+    with st.container(border=True):
+        st.markdown('<span class="card-title">🚰 Sink Selection</span>', unsafe_allow_html=True)
 
-        # Sink Selection (moved before budget slider so we can use it in price calculations)
-        st.markdown("### 🚰 Sink Selection")
-        selected_sink = st.selectbox(
-            "Select Sink Model",
-            options=list(SINK_OPTIONS.keys()),
-            help="Choose a sink to include in the total price"
-        )
-        sink_price = SINK_OPTIONS[selected_sink]
+        col_dropdown, col_add = st.columns([4, 1])
+        with col_dropdown:
+            sink_to_add = st.selectbox(
+                "Select Sink Model",
+                options=list(SINK_OPTIONS.keys()),
+                help="Choose a sink to add",
+                key="sink_selector"
+            )
+        with col_add:
+            st.markdown("<br>", unsafe_allow_html=True)  # Spacing
+            if st.button("➕ Add Sink", use_container_width=True):
+                st.session_state.selected_sinks.append({
+                    'type': sink_to_add,
+                    'price': SINK_OPTIONS[sink_to_add],
+                    'quantity': 1
+                })
+                st.rerun()
 
-        st.markdown("---")
+        # Display selected sinks
+        if st.session_state.selected_sinks:
+            st.markdown("**Selected Sinks:**")
+            for idx, sink in enumerate(st.session_state.selected_sinks):
+                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                with col1:
+                    st.write(sink['type'])
+                with col2:
+                    if st.button("➖", key=f"minus_sink_{idx}", use_container_width=True):
+                        if sink['quantity'] > 1:
+                            st.session_state.selected_sinks[idx]['quantity'] -= 1
+                        else:
+                            st.session_state.selected_sinks.pop(idx)
+                        st.rerun()
+                with col3:
+                    st.write(f"**{sink['quantity']}**")
+                with col4:
+                    if st.button("➕", key=f"plus_sink_{idx}", use_container_width=True):
+                        st.session_state.selected_sinks[idx]['quantity'] += 1
+                        st.rerun()
 
-        # Calculate dynamic budget range based on current sqft and sink
-        # Calculate prices for all slabs with sufficient stock
+        # Calculate total sink price
+        total_sink_price = sum(sink['price'] * sink['quantity'] for sink in st.session_state.selected_sinks)
+        if total_sink_price > 0:
+            st.markdown(f"**Total Sink Cost: ${total_sink_price:,.2f}**")
+        else:
+            st.info("No sinks selected")
+
+    # FILTERS
+    with st.container(border=True):
+        st.markdown('<span class="card-title">🔍 Filters</span>', unsafe_allow_html=True)
+
+        # Calculate dynamic budget range based on current sqft and sinks
         temp_filtered = grouped_df[grouped_df['On Hand Qty'] >= (sqft * WASTE_FACTOR)].copy()
         if len(temp_filtered) > 0:
             temp_filtered['_calc_price'] = temp_filtered['Unit_Cost'].apply(
-                lambda uc: calculate_cost(uc, sqft, sink_price)['total_with_tax']
+                lambda uc: calculate_cost(uc, sqft, total_sink_price)['total_with_tax']
             )
             min_price = int(temp_filtered['_calc_price'].min())
             max_price = int(temp_filtered['_calc_price'].max())
@@ -255,37 +295,37 @@ if df is not None:
             "💰 Customer Budget",
             min_value=min_price,
             max_value=max_price,
-            value=max_price,  # Default to max to show all options
+            value=max_price,
             step=100,
             help="Filter slabs by maximum customer total price"
         )
 
-        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
 
-        # Brand filter
-        all_brands = sorted(grouped_df['Brand'].unique())
-        selected_brands = st.multiselect(
-            "Brand",
-            options=all_brands,
-            default=all_brands,
-            help="Select one or more brands"
-        )
+        with col1:
+            all_brands = sorted(grouped_df['Brand'].unique())
+            selected_brands = st.multiselect(
+                "Brand",
+                options=all_brands,
+                default=all_brands,
+                help="Select one or more brands"
+            )
 
-        # Thickness filter
-        all_thickness = sorted(grouped_df['Thickness'].unique(), reverse=True)
-        selected_thickness = st.multiselect(
-            "Thickness",
-            options=all_thickness,
-            default=all_thickness,
-            help="Select one or more thickness options"
-        )
+        with col2:
+            all_thickness = sorted(grouped_df['Thickness'].unique(), reverse=True)
+            selected_thickness = st.multiselect(
+                "Thickness",
+                options=all_thickness,
+                default=all_thickness,
+                help="Select one or more thickness options"
+            )
 
-        # Search box
-        search_term = st.text_input(
-            "🔎 Search Colors",
-            placeholder="Type to search...",
-            help="Search by color name"
-        )
+        with col3:
+            search_term = st.text_input(
+                "🔎 Search Colors",
+                placeholder="Type to search...",
+                help="Search by color name"
+            )
 
     # Apply filters
     filtered_df = grouped_df.copy()
@@ -310,7 +350,7 @@ if df is not None:
     # Apply budget filter - calculate price for each slab and filter
     if max_budget < max_price:  # Only filter if budget is set below the maximum available price
         filtered_df['_temp_price'] = filtered_df['Unit_Cost'].apply(
-            lambda uc: calculate_cost(uc, sqft, sink_price)['total_with_tax']
+            lambda uc: calculate_cost(uc, sqft, total_sink_price)['total_with_tax']
         )
         filtered_df = filtered_df[filtered_df['_temp_price'] <= max_budget]
         filtered_df = filtered_df.drop(columns=['_temp_price'])
@@ -337,7 +377,7 @@ if df is not None:
     if selected_variant:
         slab_data = grouped_df[grouped_df['Product Variant'] == selected_variant].iloc[0]
         all_slabs = df[df['Product Variant'] == selected_variant]  # Get all individual slabs for this variant
-        pricing = calculate_cost(slab_data['Unit_Cost'], sqft, sink_price)
+        pricing = calculate_cost(slab_data['Unit_Cost'], sqft, total_sink_price)
 
         c1, c2 = st.columns([1, 1])
 
@@ -385,7 +425,10 @@ if df is not None:
                 st.write(f"Customer Mat/Fab: ${pricing['customer_mat_fab']:,.2f}")
                 st.write(f"Customer Install: ${pricing['customer_ins']:,.2f}")
                 if pricing['sink_price'] > 0:
-                    st.write(f"Sink: ${pricing['sink_price']:,.2f}")
+                    st.write(f"**Sinks:**")
+                    for sink in st.session_state.selected_sinks:
+                        st.write(f"  • {sink['type']}: ${sink['price']:,.2f} × {sink['quantity']} = ${sink['price'] * sink['quantity']:,.2f}")
+                    st.write(f"Total Sinks: ${pricing['sink_price']:,.2f}")
                 st.write(f"**Subtotal:** ${pricing['subtotal']:,.2f}")
                 st.write(f"**Total with Tax:** ${pricing['total_with_tax']:,.2f}")
 
@@ -399,15 +442,10 @@ if df is not None:
                 'thickness': slab_data['Thickness'],
                 'price': pricing['total_with_tax'],
                 'sqft': sqft,
-                'sink': selected_sink
+                'sinks': [{'type': s['type'], 'quantity': s['quantity'], 'price': s['price']} for s in st.session_state.selected_sinks]
             }
-            # Avoid duplicates
-            if not any(item['variant'] == selected_variant and item['sqft'] == sqft and item['sink'] == selected_sink
-                      for item in st.session_state.comparison_tray):
-                st.session_state.comparison_tray.append(comparison_item)
-                st.success("Added to comparison tray!")
-            else:
-                st.info("This configuration is already in your comparison tray.")
+            st.session_state.comparison_tray.append(comparison_item)
+            st.success("Added to comparison tray!")
 
     # Comparison Tray Display at Bottom
     if st.session_state.comparison_tray:
@@ -423,15 +461,34 @@ if df is not None:
 
         # Display comparison items in columns
         num_items = len(st.session_state.comparison_tray)
-        cols = st.columns(min(num_items, 4))  # Max 4 columns
+        cols = st.columns(min(num_items, 6))  # Show up to 6 items in a row
 
         for idx, item in enumerate(st.session_state.comparison_tray):
-            with cols[idx % 4]:
+            with cols[idx % 6]:
                 with st.container(border=True):
                     st.markdown(f"**{item['brand']} {item['color']}**")
                     st.write(f"{item['thickness']} • {item['sqft']:.0f} sf")
-                    st.write(f"Sink: {item['sink'].split('-')[0].strip()}")
+
+                    # Display sinks
+                    if item.get('sinks'):
+                        st.write("**Sinks:**")
+                        for sink in item['sinks']:
+                            st.write(f"• {sink['type'].split('-')[0].strip()}: {sink['quantity']}x")
+                    else:
+                        # Handle old format for backward compatibility
+                        if item.get('sink'):
+                            st.write(f"Sink: {item['sink'].split('-')[0].strip()}")
+
                     st.markdown(f"### ${item['price']:,.2f}")
+
+                    # View Installed Photos button
+                    search_query = f"{item['brand']} {item['color']} countertop installed".replace(" ", "+")
+                    st.link_button(
+                        "🖼️ View Photos",
+                        f"https://www.google.com/search?tbm=isch&q={search_query}",
+                        use_container_width=True
+                    )
+
                     if st.button(f"Remove", key=f"remove_{idx}", use_container_width=True):
                         st.session_state.comparison_tray.pop(idx)
                         st.rerun()
