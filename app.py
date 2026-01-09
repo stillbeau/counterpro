@@ -4,6 +4,7 @@ import pandas as pd
 import re
 import json
 from datetime import datetime
+import webbrowser
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(
@@ -71,47 +72,66 @@ DATA_SOURCES = [
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vSkoSeMuPGqr5-JEBhHO5l0fFYlkfmbMUW-VU8UZEpR0pd4lSeyK74WHE47m1zYMg/pub?output=csv"
 ]
 
-def calculate_cost(unit_cost, project_sqft):
+# SINK DATA
+SINK_OPTIONS = {
+    "In-Stock/No Sink": 0.00,
+    "50/50 Undermount - SKU 83742 (16 ga)": 300.00,
+    "Large Single Bowl - SKU 83744 (16 ga)": 325.00,
+    "Medium Single Bowl - SKU 83745 (18 ga)": 230.00,
+    "60/40 Undermount - SKU 83747 (16 ga)": 370.00,
+    "Large Rectangular Vanity - SKU 84020 (Porcelain)": 105.00,
+    "Large Oval Vanity - SKU 84024 (Porcelain)": 89.00
+}
+
+def calculate_cost(unit_cost, project_sqft, sink_price=0.0):
     """
     Revised pricing logic:
     1. Calculate Raw Direct Cost (Material + Fab).
     2. Calculate IB (Material marked up 5%, enforcing 18% floor on total).
     3. Calculate Customer Material + Fab (Fixed 15% higher than IB).
+    4. Add Sink Price to Customer Total.
     """
     uc = float(unit_cost)
     sq_finished = float(project_sqft)
     sq_with_waste = sq_finished * WASTE_FACTOR
-    
+    sink_price = float(sink_price)
+
     # 1. RAW DIRECT COSTS
     raw_material_cost = uc * sq_with_waste
     raw_fab_cost = FABRICATION_COST_PER_SQFT * sq_finished
     total_direct_cost = raw_material_cost + raw_fab_cost
-    
+
     # 2. INTERNAL BASE (IB) CALCULATION
     # Candidate A: Material marked up by 5% + raw fabrication
     ib_candidate_markup = (raw_material_cost * IB_MATERIAL_MARKUP) + raw_fab_cost
     # Candidate B: Enforcing the 18% margin floor on direct costs
     ib_candidate_floor = total_direct_cost / (1 - IB_MIN_MARGIN)
-    
+
     # Final IB is whichever is higher
     ib_cost = max(ib_candidate_markup, ib_candidate_floor)
-    
+
     # 3. CUSTOMER PRICING
     # The requirement: Material and Fabrication needs to be 15% higher than IB
     customer_mat_fab_total = ib_cost * IB_TO_CUSTOMER_MARKUP
-    
+
     # Installation is a separate direct pass-through
     customer_ins_cost = INSTALL_COST_PER_SQFT * sq_finished
-    
-    subtotal = customer_mat_fab_total + customer_ins_cost
-    
+
+    # Slab subtotal (before sink and tax)
+    slab_subtotal = customer_mat_fab_total + customer_ins_cost
+
+    # Add sink price
+    subtotal = slab_subtotal + sink_price
+
     # Analytics
-    profit = subtotal - (total_direct_cost + (INSTALL_COST_PER_SQFT * sq_finished)) # True Profit
-    margin_pct = (profit / subtotal * 100) if subtotal > 0 else 0
-    
+    profit = slab_subtotal - (total_direct_cost + (INSTALL_COST_PER_SQFT * sq_finished)) # True Profit (sink not included in profit calc)
+    margin_pct = (profit / slab_subtotal * 100) if slab_subtotal > 0 else 0
+
     return {
         "customer_mat_fab": customer_mat_fab_total,
         "customer_ins": customer_ins_cost,
+        "sink_price": sink_price,
+        "slab_subtotal": slab_subtotal,
         "subtotal": subtotal,
         "ib_cost": ib_cost,
         "margin_pct": margin_pct,
@@ -177,6 +197,10 @@ def fetch_data():
 # --- UI EXECUTION ---
 st.title("🧱 Dead Stock Sales Tool")
 
+# Initialize session state for comparison tray
+if 'comparison_tray' not in st.session_state:
+    st.session_state.comparison_tray = []
+
 df = fetch_data()
 if df is not None:
     # Group by Product Variant and calculate totals
@@ -192,6 +216,18 @@ if df is not None:
     # SIDEBAR FILTERS
     with st.sidebar:
         st.markdown("### 🔍 Filters")
+
+        # Budget Range Slider
+        max_budget = st.slider(
+            "💰 Customer Budget",
+            min_value=0,
+            max_value=10000,
+            value=10000,
+            step=100,
+            help="Filter slabs by maximum customer total price"
+        )
+
+        st.markdown("---")
 
         # Brand filter
         all_brands = sorted(grouped_df['Brand'].unique())
@@ -218,6 +254,22 @@ if df is not None:
             help="Search by color name"
         )
 
+        st.markdown("---")
+
+        # Sink Selection
+        st.markdown("### 🚰 Sink Selection")
+        selected_sink = st.selectbox(
+            "Select Sink Model",
+            options=list(SINK_OPTIONS.keys()),
+            help="Choose a sink to include in the total price"
+        )
+        sink_price = SINK_OPTIONS[selected_sink]
+
+    # Main Config Card - Get sqft first
+    with st.container(border=True):
+        st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
+        sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
+
     # Apply filters
     filtered_df = grouped_df.copy()
 
@@ -234,36 +286,40 @@ if df is not None:
             filtered_df['Product Variant'].str.contains(search_term, case=False, na=False)
         ]
 
-    # Main Config Card
+    # Apply budget filter - calculate price for each slab and filter
+    if max_budget < 10000:  # Only filter if budget is set below max
+        filtered_df['_temp_price'] = filtered_df['Unit_Cost'].apply(
+            lambda uc: calculate_cost(uc, sqft, sink_price)['total_with_tax']
+        )
+        filtered_df = filtered_df[filtered_df['_temp_price'] <= max_budget]
+        filtered_df = filtered_df.drop(columns=['_temp_price'])
+
+    # Slab Selection Card
     with st.container(border=True):
-        st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
-        col_a, col_b = st.columns(2)
-        with col_a:
-            sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0)
-        with col_b:
-            # Create clean display names using parsed data
-            filtered_df['display_name'] = filtered_df.apply(
-                lambda row: f"{row['Brand']} {row['Color']} {row['Thickness']} ({row['On Hand Qty']:.1f} sf)", axis=1
-            )
+        st.markdown('<span class="card-title">Select Material</span>', unsafe_allow_html=True)
+        # Create clean display names using parsed data
+        filtered_df['display_name'] = filtered_df.apply(
+            lambda row: f"{row['Brand']} {row['Color']} {row['Thickness']} ({row['On Hand Qty']:.1f} sf)", axis=1
+        )
 
-            # Create a mapping for reverse lookup
-            display_to_variant = dict(zip(filtered_df['display_name'], filtered_df['Product Variant']))
+        # Create a mapping for reverse lookup
+        display_to_variant = dict(zip(filtered_df['display_name'], filtered_df['Product Variant']))
 
-            if len(filtered_df) > 0:
-                selected_display = st.selectbox("Select Slab", sorted(filtered_df['display_name'].unique()))
-                selected_variant = display_to_variant[selected_display]
-            else:
-                st.warning("No materials match your filters. Try adjusting the filters above.")
-                selected_variant = None
+        if len(filtered_df) > 0:
+            selected_display = st.selectbox("Select Slab", sorted(filtered_df['display_name'].unique()))
+            selected_variant = display_to_variant[selected_display]
+        else:
+            st.warning("No materials match your filters. Try adjusting the filters above.")
+            selected_variant = None
 
     # Results
     if selected_variant:
         slab_data = grouped_df[grouped_df['Product Variant'] == selected_variant].iloc[0]
         all_slabs = df[df['Product Variant'] == selected_variant]  # Get all individual slabs for this variant
-        pricing = calculate_cost(slab_data['Unit_Cost'], sqft)
-        
+        pricing = calculate_cost(slab_data['Unit_Cost'], sqft, sink_price)
+
         c1, c2 = st.columns([1, 1])
-        
+
         with c1:
             with st.container(border=True):
                 st.markdown('<span class="card-title">Inventory Context</span>', unsafe_allow_html=True)
@@ -288,6 +344,14 @@ if df is not None:
 
                 st.metric("Available Qty", f"{slab_data['On Hand Qty']:.1f} sf")
 
+                # Google Images Deep Link
+                search_query = f"{slab_data['Brand']} {slab_data['Color']} countertop installed".replace(" ", "+")
+                st.link_button(
+                    "🖼️ View Installed Photos",
+                    f"https://www.google.com/search?tbm=isch&q={search_query}",
+                    use_container_width=True
+                )
+
         with c2:
             st.markdown(f"""
             <div class="large-price">
@@ -301,6 +365,57 @@ if df is not None:
                 st.metric("Slab Cost (Internal IB)", f"${pricing['ib_cost']:,.2f}")
                 st.write(f"Customer Mat/Fab: ${pricing['customer_mat_fab']:,.2f}")
                 st.write(f"Customer Install: ${pricing['customer_ins']:,.2f}")
+                if pricing['sink_price'] > 0:
+                    st.write(f"Sink: ${pricing['sink_price']:,.2f}")
+                st.write(f"**Subtotal:** ${pricing['subtotal']:,.2f}")
+                st.write(f"**Total with Tax:** ${pricing['total_with_tax']:,.2f}")
+
+        # Add to Comparison Button
+        st.markdown("---")
+        if st.button("➕ Add to Comparison", use_container_width=True, type="primary"):
+            comparison_item = {
+                'variant': selected_variant,
+                'brand': slab_data['Brand'],
+                'color': slab_data['Color'],
+                'thickness': slab_data['Thickness'],
+                'price': pricing['total_with_tax'],
+                'sqft': sqft,
+                'sink': selected_sink
+            }
+            # Avoid duplicates
+            if not any(item['variant'] == selected_variant and item['sqft'] == sqft and item['sink'] == selected_sink
+                      for item in st.session_state.comparison_tray):
+                st.session_state.comparison_tray.append(comparison_item)
+                st.success("Added to comparison tray!")
+            else:
+                st.info("This configuration is already in your comparison tray.")
+
+    # Comparison Tray Display at Bottom
+    if st.session_state.comparison_tray:
+        st.markdown("---")
+        st.markdown("### 🔍 Comparison Tray")
+
+        # Add clear all button
+        col_clear, col_spacer = st.columns([1, 5])
+        with col_clear:
+            if st.button("🗑️ Clear All", use_container_width=True):
+                st.session_state.comparison_tray = []
+                st.rerun()
+
+        # Display comparison items in columns
+        num_items = len(st.session_state.comparison_tray)
+        cols = st.columns(min(num_items, 4))  # Max 4 columns
+
+        for idx, item in enumerate(st.session_state.comparison_tray):
+            with cols[idx % 4]:
+                with st.container(border=True):
+                    st.markdown(f"**{item['brand']} {item['color']}**")
+                    st.write(f"{item['thickness']} • {item['sqft']:.0f} sf")
+                    st.write(f"Sink: {item['sink'].split('-')[0].strip()}")
+                    st.markdown(f"### ${item['price']:,.2f}")
+                    if st.button(f"Remove", key=f"remove_{idx}", use_container_width=True):
+                        st.session_state.comparison_tray.pop(idx)
+                        st.rerun()
 
 else:
     st.error("Unable to load inventory data.")
