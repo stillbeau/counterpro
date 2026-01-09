@@ -273,6 +273,10 @@ if df is not None:
     # Apply filters
     filtered_df = grouped_df.copy()
 
+    # Filter by sufficient stock first
+    required_sqft = sqft * WASTE_FACTOR
+    filtered_df = filtered_df[filtered_df['On Hand Qty'] >= required_sqft]
+
     if selected_brands:
         filtered_df = filtered_df[filtered_df['Brand'].isin(selected_brands)]
 
@@ -323,8 +327,6 @@ if df is not None:
         with c1:
             with st.container(border=True):
                 st.markdown('<span class="card-title">Inventory Context</span>', unsafe_allow_html=True)
-                if slab_data['On Hand Qty'] < (sqft * WASTE_FACTOR):
-                    st.markdown(f'<div class="low-stock">⚠️ Insufficient Stock: Need {sqft * WASTE_FACTOR:.1f}sf, have {slab_data["On Hand Qty"]:.1f}sf</div>', unsafe_allow_html=True)
 
                 # Display all serial numbers for this variant
                 serial_num_cols = ['Serial Number', 'SKU', 'Item Code', 'Product SKU', 'Serialized Inventory']
