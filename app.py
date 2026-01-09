@@ -118,8 +118,8 @@ def calculate_cost(unit_cost, project_sqft):
         "total_with_tax": subtotal * (1 + TAX_RATE)
     }
 
-@st.cache_data(ttl=600)
 def fetch_data():
+    """Fetches fresh inventory data from Google Sheets (no caching - always up-to-date)"""
     all_dfs = []
     for url in DATA_SOURCES:
         try:
@@ -130,7 +130,7 @@ def fetch_data():
                 df['Serialized On Hand Cost'] = pd.to_numeric(df['Serialized On Hand Cost'].astype(str).str.replace(r'[$,]', '', regex=True), errors='coerce')
                 all_dfs.append(df)
         except: continue
-    
+
     if not all_dfs: return None
     df = pd.concat(all_dfs, ignore_index=True)
     df = df[df['On Hand Qty'] > 0].copy()
