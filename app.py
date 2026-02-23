@@ -216,6 +216,24 @@ def fetch_data():
 
 
 # --- 7. PDF GENERATION ---
+def _pdf_safe(text: str) -> str:
+    """
+    Strip characters outside latin-1 (e.g. emoji, em-dashes) so fpdf2's
+    built-in Helvetica font doesn't raise FPDFUnicodeEncodingException.
+    Replace common typographic chars with ASCII equivalents first, then
+    silently drop anything that still can't encode.
+    """
+    replacements = {
+        "\u2014": "-",   # em dash  —
+        "\u2013": "-",   # en dash  –
+        "\u00d7": "x",   # multiplication sign ×  (already latin-1, but keep explicit)
+    }
+    for orig, repl in replacements.items():
+        text = text.replace(orig, repl)
+    # Drop everything outside latin-1 (emoji, etc.)
+    return text.encode("latin-1", errors="ignore").decode("latin-1")
+
+
 def generate_quote_pdf(slab_name, sqft, sinks, pricing):
     """Generate a basic quote PDF using fpdf2. Returns bytes."""
     pdf = FPDF()
@@ -225,7 +243,7 @@ def generate_quote_pdf(slab_name, sqft, sinks, pricing):
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_fill_color(79, 70, 229)   # Indigo brand colour
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 14, "CounterPro — Customer Quote", new_x="LMARGIN", new_y="NEXT", align="C", fill=True)
+    pdf.cell(0, 14, "CounterPro - Customer Quote", new_x="LMARGIN", new_y="NEXT", align="C", fill=True)
     pdf.ln(4)
 
     # Reset colours for body
@@ -249,7 +267,7 @@ def generate_quote_pdf(slab_name, sqft, sinks, pricing):
     pdf.set_font("Helvetica", size=10)
     pdf.cell(50, 7, "Material:", new_x="RIGHT", new_y="TOP")
     pdf.set_font("Helvetica", "B", 10)
-    pdf.multi_cell(0, 7, slab_name)
+    pdf.multi_cell(0, 7, _pdf_safe(slab_name))
     pdf.set_font("Helvetica", size=10)
     pdf.cell(50, 7, "Square Footage:", new_x="RIGHT", new_y="TOP")
     pdf.set_font("Helvetica", "B", 10)
@@ -266,8 +284,10 @@ def generate_quote_pdf(slab_name, sqft, sinks, pricing):
         pdf.set_font("Helvetica", size=10)
         for sink in sinks:
             line_total = sink['price'] * sink['quantity']
+            # _pdf_safe strips emoji prefixes and replaces em/en dashes
+            sink_label = _pdf_safe(sink['type'])
             pdf.cell(0, 6,
-                     f"  {sink['type']}  ×{sink['quantity']}  —  ${line_total:,.2f}",
+                     f"  {sink_label}  x{sink['quantity']}  -  ${line_total:,.2f}",
                      new_x="LMARGIN", new_y="NEXT")
         pdf.ln(4)
 
