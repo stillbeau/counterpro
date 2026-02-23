@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from fpdf import FPDF
 
 # --- 1. CONFIGURATION ---
@@ -215,95 +215,219 @@ def fetch_data():
 
 
 # --- 7. PDF GENERATION ---
-def generate_quote_pdf(slab_name, sqft, sinks, pricing):
-    """Generate a basic quote PDF using fpdf2. Returns bytes."""
+def generate_quote_pdf(slab_name, sqft, sinks, pricing, customer_name="", quoted_by=""):
+    """
+    Generate a FLOFORM-style customer quote PDF.
+
+    Layout:
+      Page 1 – logo header · info-grid table · Area #1 line items ·
+               pricing totals · footer note · Notes box
+      Page 2 – legal disclaimer · signature lines · decision-maker section
+    Returns bytes.
+    """
+    # ── Setup ─────────────────────────────────────────────────────────────────
+    PAGE_W = 180          # usable width (A4 210 mm − 15 mm × 2 margins)
+    ROW_H  = 5.5          # standard table-cell row height (mm)
+    COL3   = PAGE_W / 3   # 60 mm  — 3-column table
+    COL4   = PAGE_W / 4   # 45 mm  — 4-column table
+
+    today       = datetime.now()
+    expiry_date = today + timedelta(days=60)
+
+    def fmt_date(dt):
+        return f"{dt.month}/{dt.day}/{dt.year}"
+
+    def strip_emoji(text):
+        """Remove leading non-ASCII emoji characters."""
+        return re.sub(r'^[^A-Za-z0-9]+', '', text).strip()
+
     pdf = FPDF()
+    pdf.set_margins(15, 15, 15)
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    # Header
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.set_fill_color(79, 70, 229)   # Indigo brand colour
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 14, "CounterPro — Customer Quote", new_x="LMARGIN", new_y="NEXT", align="C", fill=True)
-    pdf.ln(4)
-
-    # Reset colours for body
-    pdf.set_text_color(30, 41, 59)
-
-    # Date
-    pdf.set_font("Helvetica", size=9)
+    # ── LOGO / HEADER ─────────────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "B", 26)
+    pdf.set_text_color(79, 70, 229)   # brand indigo
+    pdf.cell(0, 12, "CounterPro", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "I", 10)
     pdf.set_text_color(100, 116, 139)
-    pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%B %d, %Y  %H:%M')}", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(4)
+    pdf.cell(0, 5, "Countertops for Life", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
 
-    # Section: Slab
+    # ── INFO GRID ─────────────────────────────────────────────────────────────
+    pdf.set_draw_color(0, 0, 0)
+    pdf.set_line_width(0.3)
+
+    # Row A — 3 columns: Quote | Account | Quoted By
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(COL3, ROW_H, "Quote:",         border="LT",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL3, ROW_H, "Account:",       border="LT",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL3, ROW_H, "Quoted By:",     border="LTR", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=9)
+    pdf.cell(COL3, ROW_H, customer_name or "\u2014", border="LB",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL3, ROW_H, "FLOFORM Misc Retail",     border="LB",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL3, ROW_H, quoted_by or "\u2014",     border="LBR", new_x="LMARGIN", new_y="NEXT")
+
+    # Row B — 4 columns: Quote ID# | Revision | Date | Expiration Date
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(COL4, ROW_H, "Quote ID#:",        border="LT",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL4, ROW_H, "Revision:",         border="LT",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL4, ROW_H, "Date:",             border="LT",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL4, ROW_H, "Expiration Date:",  border="LTR", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=9)
+    pdf.cell(COL4, ROW_H, "\u2014",              border="LB",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL4, ROW_H, "1",                   border="LB",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL4, ROW_H, fmt_date(today),        border="LB",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(COL4, ROW_H, fmt_date(expiry_date),  border="LBR", new_x="LMARGIN", new_y="NEXT")
+
+    # Row C — full-width: Quote Address
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.cell(PAGE_W, ROW_H, "Quote Address:",     border="LTR", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=9)
+    pdf.cell(PAGE_W, ROW_H, "FLOFORM Misc Retail", border="LBR", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+
+    # ── QUOTE BODY ────────────────────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(30, 41, 59)
-    pdf.cell(0, 8, "SLAB DETAILS", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_draw_color(226, 232, 240)
-    pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 180, pdf.get_y())
-    pdf.ln(2)
+    pdf.cell(0, 7, "Quote:", new_x="LMARGIN", new_y="NEXT")
 
-    pdf.set_font("Helvetica", size=10)
-    pdf.cell(50, 7, "Material:", new_x="RIGHT", new_y="TOP")
+    pdf.set_font("Helvetica", "BU", 10)
+    pdf.set_text_color(0, 100, 60)          # dark green — matches FLOFORM area heading
+    pdf.cell(0, 6, "Area #1", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(30, 41, 59)
+
+    pdf.set_font("Helvetica", size=9)
+
+    # Material line
+    pdf.cell(0, 5.5, slab_name, new_x="LMARGIN", new_y="NEXT")
+
+    # Square footage line
+    pdf.cell(0, 5.5, f"{sqft:.1f} sq ft finished area", new_x="LMARGIN", new_y="NEXT")
+
+    # Sink lines
+    for sink in sinks:
+        sink_clean = strip_emoji(sink['type'])
+        qty_label  = f"{sink['quantity']} \u00d7 " if sink['quantity'] > 1 else ""
+        pdf.cell(0, 5.5, f"{qty_label}Sink - {sink_clean}", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(5)
+
+    # ── PRICING ───────────────────────────────────────────────────────────────
+    subtotal = pricing['subtotal']
+    gst      = subtotal * TAX_RATE
+    total    = pricing['total_with_tax']
+    lbl_w    = PAGE_W - 45
+    val_w    = 45
+
+    pdf.set_font("Helvetica", size=9)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(lbl_w, 6, "Total (before tax):", new_x="RIGHT", new_y="TOP", align="R")
+    pdf.cell(val_w, 6, f"${subtotal:,.2f}",  new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.cell(lbl_w, 6, "GST (5%):",           new_x="RIGHT", new_y="TOP", align="R")
+    pdf.cell(val_w, 6, f"${gst:,.2f}",        new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.ln(1)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.multi_cell(0, 7, slab_name)
-    pdf.set_font("Helvetica", size=10)
-    pdf.cell(50, 7, "Square Footage:", new_x="RIGHT", new_y="TOP")
+    pdf.set_line_width(0.5)
+    pdf.set_draw_color(0, 0, 0)
+    pdf.cell(lbl_w, 7, "Total:", border="T", new_x="RIGHT", new_y="TOP", align="R")
+    pdf.cell(val_w, 7, f"${total:,.2f}", border="T", new_x="LMARGIN", new_y="NEXT", align="R")
+    pdf.ln(3)
+
+    # ── FOOTER NOTE ───────────────────────────────────────────────────────────
+    pdf.set_line_width(0.3)
+    pdf.set_draw_color(180, 180, 180)
+    pdf.set_fill_color(220, 220, 220)
+    pdf.set_font("Helvetica", size=8)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(
+        0, 6,
+        "Template, Fabrication and Install included in quote unless otherwise noted",
+        border=1, fill=True, align="C", new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.ln(3)
+
+    # ── NOTES ─────────────────────────────────────────────────────────────────
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 7, f"{sqft:.1f} sq ft", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 7, "Notes:", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_draw_color(150, 150, 150)
+    pdf.rect(pdf.get_x(), pdf.get_y(), PAGE_W, 20)
+    pdf.ln(24)
+
+    # ── LEGAL DISCLAIMER ──────────────────────────────────────────────────────
+    pdf.set_font("Helvetica", "I", 7.5)
+    pdf.set_text_color(60, 60, 60)
+    disclaimer = (
+        "*Tax not included\n\n"
+        "Quote is based on measurements provided in submission and subject to change after field "
+        "measurements are conducted. Removal of existing countertops or repair of existing cabinets "
+        "not included unless specifically noted as a line item charge.\n\n"
+        "This Contract must be signed and deposit received prior to order being processed. "
+        "50% deposit required at signing. Balance will be processed 24 hrs prior to "
+        "Delivery/Installation.\n"
+        "Template fee may be charged in the event the order does not proceed after a technician "
+        "has visited site.\n"
+        "I have reviewed this Contract and confirm the countertop material, style, size, color, "
+        "finish, and the price are correct. By signing this contract, I authorize FLOFORM to "
+        "proceed with this order and have provided the deposit required. I authorize my credit "
+        "card to be charged for the deposit and final balance unless another form of payment "
+        "is provided."
+    )
+    pdf.multi_cell(0, 4, disclaimer)
     pdf.ln(4)
 
-    # Section: Sinks
-    if sinks:
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.set_text_color(30, 41, 59)
-        pdf.cell(0, 8, "SINKS", new_x="LMARGIN", new_y="NEXT")
-        pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 180, pdf.get_y())
-        pdf.ln(2)
-        pdf.set_font("Helvetica", size=10)
-        for sink in sinks:
-            line_total = sink['price'] * sink['quantity']
-            pdf.cell(0, 6,
-                     f"  {sink['type']}  ×{sink['quantity']}  —  ${line_total:,.2f}",
-                     new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(4)
-
-    # Section: Pricing summary
-    pdf.set_font("Helvetica", "B", 11)
+    # ── SIGNATURE LINES ───────────────────────────────────────────────────────
     pdf.set_text_color(30, 41, 59)
-    pdf.cell(0, 8, "PRICING SUMMARY", new_x="LMARGIN", new_y="NEXT")
-    pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 180, pdf.get_y())
+    pdf.set_font("Helvetica", size=9)
+    pdf.set_line_width(0.3)
+    pdf.set_draw_color(0, 0, 0)
+
+    # Full Name
+    pdf.cell(35, 7, "Full Name", new_x="RIGHT", new_y="TOP")
+    pdf.cell(PAGE_W - 35, 7, "", border="B", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
 
-    pdf.set_font("Helvetica", size=10)
-    rows = [
-        ("Material & Fabrication",  f"${pricing['customer_mat_fab']:,.2f}"),
-        ("Installation",             f"${pricing['customer_ins']:,.2f}"),
-        ("Sinks",                    f"${pricing['sink_price']:,.2f}"),
-        ("Subtotal",                 f"${pricing['subtotal']:,.2f}"),
-        ("GST (5%)",                 f"${pricing['subtotal'] * TAX_RATE:,.2f}"),
-    ]
-    col_w = 90
-    for label, value in rows:
-        pdf.cell(col_w, 7, label, new_x="RIGHT", new_y="TOP")
-        pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT", align="R")
-
-    # Total — highlighted row
+    # Credit Card #  /  Exp Date  /  CV#
+    # Widths: 30 + 60 + 20 + 18 + 4 + 18 + 8 + 22 = 180
+    pdf.cell(30,  7, "Credit Card #", new_x="RIGHT", new_y="TOP")
+    pdf.cell(60,  7, "", border="B",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(20,  7, "  Exp Date",    new_x="RIGHT", new_y="TOP")
+    pdf.cell(18,  7, "", border="B",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(4,   7, "/", align="C",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(18,  7, "", border="B",  new_x="RIGHT", new_y="TOP")
+    pdf.cell(8,   7, "  CV#",         new_x="RIGHT", new_y="TOP")
+    pdf.cell(22,  7, "", border="B",  new_x="LMARGIN", new_y="NEXT")
     pdf.ln(2)
-    pdf.set_fill_color(79, 70, 229)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(col_w, 9, "TOTAL (incl. GST)", fill=True, new_x="RIGHT", new_y="TOP")
-    pdf.cell(0,    9, f"${pricing['total_with_tax']:,.2f}", fill=True,
-             align="R", new_x="LMARGIN", new_y="NEXT")
 
-    # Footer
-    pdf.ln(10)
-    pdf.set_text_color(148, 163, 184)
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(0, 5, "This quote is valid for 30 days. Prices exclude installation site preparation.",
-             new_x="LMARGIN", new_y="NEXT", align="C")
+    # Signature / Date  (25 + 90 + 12 + 53 = 180)
+    pdf.cell(25, 7, "Signature", new_x="RIGHT", new_y="TOP")
+    pdf.cell(90, 7, "", border="B", new_x="RIGHT", new_y="TOP")
+    pdf.cell(12, 7, "  Date",    new_x="RIGHT", new_y="TOP")
+    pdf.cell(53, 7, "", border="B", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+
+    # Decision-maker section
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(0, 5, "WE REQUIRE A DECISION MAKER ON SITE TO SIGN OFF ON THE TEMPLATE.",
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 180)
+    pdf.cell(0, 5, "BY SIGNING THIS, YOU ARE GIVING BINDING AUTHORITY TO THE PERSON NAMED TO MAKE DECISIONS.",
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    pdf.set_text_color(30, 41, 59)
+    pdf.set_font("Helvetica", size=8.5)
+    # Name line (75 + 105 = 180)
+    pdf.cell(75,  7, "NAME OF DECISION MAKER ON SITE AT TIME OF TEMPLATE",
+             new_x="RIGHT", new_y="TOP")
+    pdf.cell(105, 7, "", border="B", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    # Phone line (18 + 162 = 180)
+    pdf.cell(18,  7, "Phone #", new_x="RIGHT", new_y="TOP")
+    pdf.cell(162, 7, "", border="B", new_x="LMARGIN", new_y="NEXT")
 
     return bytes(pdf.output())
 
@@ -351,7 +475,21 @@ if df is not None:
     # ── Project Settings ───────────────────────────────────────────────────────
     with st.container(border=True):
         st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
-        sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
+        col_sqft, col_name, col_rep = st.columns([1, 2, 2])
+        with col_sqft:
+            sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
+        with col_name:
+            customer_name = st.text_input(
+                "Customer Name",
+                placeholder="e.g. Smith, John and Jane",
+                key="customer_name",
+            )
+        with col_rep:
+            quoted_by = st.text_input(
+                "Quoted By",
+                placeholder="e.g. Sam Beaumont",
+                key="quoted_by",
+            )
 
     # ── Sink Selection ─────────────────────────────────────────────────────────
     with st.container(border=True):
@@ -615,6 +753,8 @@ if df is not None:
                 sqft=sqft,
                 sinks=st.session_state.selected_sinks,
                 pricing=pricing,
+                customer_name=customer_name,
+                quoted_by=quoted_by,
             )
             st.download_button(
                 label="📄 Download Quote as PDF",
