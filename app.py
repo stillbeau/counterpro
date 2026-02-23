@@ -1,8 +1,7 @@
-import io
-import math
 import streamlit as st
 import pandas as pd
 import re
+from datetime import datetime
 from fpdf import FPDF
 
 # --- 1. CONFIGURATION ---
@@ -250,7 +249,6 @@ def generate_quote_pdf(slab_name, sqft, sinks, pricing):
     pdf.set_text_color(30, 41, 59)
 
     # Date
-    from datetime import datetime
     pdf.set_font("Helvetica", size=9)
     pdf.set_text_color(100, 116, 139)
     pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%B %d, %Y  %H:%M')}", new_x="LMARGIN", new_y="NEXT")
@@ -368,6 +366,7 @@ if df is not None:
         'Thickness':                'first',
     }).reset_index()
     grouped_df['Unit_Cost'] = grouped_df['Serialized On Hand Cost'] / grouped_df['On Hand Qty']
+    grouped_df = grouped_df[grouped_df['Unit_Cost'].notna() & (grouped_df['Unit_Cost'] > 0)].copy()
 
     # ── Project Settings ───────────────────────────────────────────────────────
     with st.container(border=True):
@@ -389,12 +388,15 @@ if df is not None:
         with col_add:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("➕ Add Sink", use_container_width=True):
-                st.session_state.selected_sinks.append({
-                    'type':     sink_to_add,
-                    'price':    SINK_OPTIONS[sink_to_add],
-                    'quantity': 1,
-                })
-                st.rerun()
+                if SINK_OPTIONS[sink_to_add] == 0.0:
+                    st.toast("Select a sink model to add. 'No Sink' means no sink is included.")
+                else:
+                    st.session_state.selected_sinks.append({
+                        'type':     sink_to_add,
+                        'price':    SINK_OPTIONS[sink_to_add],
+                        'quantity': 1,
+                    })
+                    st.rerun()
 
         # Display selected sinks with quantity controls
         if st.session_state.selected_sinks:
@@ -607,6 +609,12 @@ if df is not None:
             """, unsafe_allow_html=True)
 
             with st.expander("💰 Cost Breakdown"):
+                margin = pricing['margin_pct']
+                margin_class = "good-margin" if margin >= 18 else "low-margin"
+                st.markdown(
+                    f'Slab Margin: <span class="{margin_class}">{margin:.1f}%</span>',
+                    unsafe_allow_html=True,
+                )
                 st.metric("Slab Cost (Internal IB)", f"${pricing['ib_cost']:,.2f}")
                 st.write(f"Customer Mat/Fab: ${pricing['customer_mat_fab']:,.2f}")
                 st.write(f"Customer Install: ${pricing['customer_ins']:,.2f}")
@@ -639,21 +647,28 @@ if df is not None:
         # ── Add to Comparison ──────────────────────────────────────────────────
         st.markdown("---")
         if st.button("➕ Add to Comparison", use_container_width=True, type="primary"):
-            comparison_item = {
-                'variant':   selected_variant,
-                'brand':     slab_data['Brand'],
-                'color':     slab_data['Color'],
-                'thickness': slab_data['Thickness'],
-                'price':     pricing['total_with_tax'],
-                'subtotal':  pricing['subtotal'],
-                'sqft':      sqft,
-                'sinks': [
-                    {'type': s['type'], 'quantity': s['quantity'], 'price': s['price']}
-                    for s in st.session_state.selected_sinks
-                ],
-            }
-            st.session_state.comparison_tray.append(comparison_item)
-            st.success("Added to comparison tray!")
+            already_in_tray = any(
+                item['variant'] == selected_variant
+                for item in st.session_state.comparison_tray
+            )
+            if already_in_tray:
+                st.warning("This material is already in the comparison tray.")
+            else:
+                comparison_item = {
+                    'variant':   selected_variant,
+                    'brand':     slab_data['Brand'],
+                    'color':     slab_data['Color'],
+                    'thickness': slab_data['Thickness'],
+                    'price':     pricing['total_with_tax'],
+                    'subtotal':  pricing['subtotal'],
+                    'sqft':      sqft,
+                    'sinks': [
+                        {'type': s['type'], 'quantity': s['quantity'], 'price': s['price']}
+                        for s in st.session_state.selected_sinks
+                    ],
+                }
+                st.session_state.comparison_tray.append(comparison_item)
+                st.success("Added to comparison tray!")
 
     # ── Comparison Tray ────────────────────────────────────────────────────────
     if st.session_state.comparison_tray:
@@ -666,37 +681,40 @@ if df is not None:
                 st.session_state.comparison_tray = []
                 st.rerun()
 
-        # Display comparison items in columns (up to 6 per row)
-        num_items = len(st.session_state.comparison_tray)
-        cols = st.columns(min(num_items, 6))
+        # Display comparison items in columns (up to 6 per row, wrapping into new rows)
+        COLS_PER_ROW = 6
+        tray = st.session_state.comparison_tray
+        for row_start in range(0, len(tray), COLS_PER_ROW):
+            row_items = tray[row_start:row_start + COLS_PER_ROW]
+            cols = st.columns(len(row_items))
+            for col_idx, item in enumerate(row_items):
+                actual_idx = row_start + col_idx
+                with cols[col_idx]:
+                    with st.container(border=True):
+                        st.markdown(f"**{item['brand']} {item['color']}**")
+                        st.write(f"{item['thickness']} • {item['sqft']:.0f} sf")
 
-        for idx, item in enumerate(st.session_state.comparison_tray):
-            with cols[idx % 6]:
-                with st.container(border=True):
-                    st.markdown(f"**{item['brand']} {item['color']}**")
-                    st.write(f"{item['thickness']} • {item['sqft']:.0f} sf")
+                        if item.get('sinks'):
+                            st.write("**Sinks:**")
+                            for sink in item['sinks']:
+                                st.write(f"• {sink['type'].split('-')[0].strip()}: {sink['quantity']}x")
+                        elif item.get('sink'):
+                            st.write(f"Sink: {item['sink'].split('-')[0].strip()}")
 
-                    if item.get('sinks'):
-                        st.write("**Sinks:**")
-                        for sink in item['sinks']:
-                            st.write(f"• {sink['type'].split('-')[0].strip()}: {sink['quantity']}x")
-                    elif item.get('sink'):
-                        st.write(f"Sink: {item['sink'].split('-')[0].strip()}")
+                        st.markdown(f"### ${item['price']:,.2f}")
 
-                    st.markdown(f"### ${item['price']:,.2f}")
+                        search_query = (
+                            f"{item['brand']} {item['color']} countertop installed"
+                        ).replace(" ", "+")
+                        st.link_button(
+                            "🖼️ View Photos",
+                            f"https://www.google.com/search?tbm=isch&q={search_query}",
+                            use_container_width=True,
+                        )
 
-                    search_query = (
-                        f"{item['brand']} {item['color']} countertop installed"
-                    ).replace(" ", "+")
-                    st.link_button(
-                        "🖼️ View Photos",
-                        f"https://www.google.com/search?tbm=isch&q={search_query}",
-                        use_container_width=True,
-                    )
-
-                    if st.button("Remove", key=f"remove_{idx}", use_container_width=True):
-                        st.session_state.comparison_tray.pop(idx)
-                        st.rerun()
+                        if st.button("Remove", key=f"remove_{actual_idx}", use_container_width=True):
+                            st.session_state.comparison_tray.pop(actual_idx)
+                            st.rerun()
 
         # ── Export Comparison Tray as CSV ──────────────────────────────────────
         tray_rows = []
