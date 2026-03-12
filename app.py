@@ -1,5 +1,4 @@
-import io
-import math
+from datetime import datetime
 import streamlit as st
 import pandas as pd
 import re
@@ -72,6 +71,10 @@ TAX_RATE      = 0.05
 IB_MATERIAL_MARKUP    = 1.05   # 5 % markup on raw material for IB
 IB_MIN_MARGIN         = 0.18   # Ensure IB is at least 18 % margin over raw costs
 IB_TO_CUSTOMER_MARKUP = 1.15   # Customer Mat+Fab is 15 % higher than IB
+
+# UI Controls
+MAX_COMPARISON_COLS = 6        # Max columns shown in the comparison tray
+QUOTE_VALIDITY_DAYS = 30       # Number of days a generated quote is valid
 
 # DATA SOURCES
 DATA_SOURCES = [
@@ -174,7 +177,7 @@ def parse_product_variant(variant_str):
         color = color_str if color_str else "Unknown"
 
         return brand, color, thickness
-    except Exception:
+    except (ValueError, AttributeError, TypeError):
         return "Unknown", str(variant_str), ""
 
 
@@ -250,7 +253,6 @@ def generate_quote_pdf(slab_name, sqft, sinks, pricing):
     pdf.set_text_color(30, 41, 59)
 
     # Date
-    from datetime import datetime
     pdf.set_font("Helvetica", size=9)
     pdf.set_text_color(100, 116, 139)
     pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%B %d, %Y  %H:%M')}", new_x="LMARGIN", new_y="NEXT")
@@ -324,7 +326,7 @@ def generate_quote_pdf(slab_name, sqft, sinks, pricing):
     pdf.ln(10)
     pdf.set_text_color(148, 163, 184)
     pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(0, 5, "This quote is valid for 30 days. Prices exclude installation site preparation.",
+    pdf.cell(0, 5, f"This quote is valid for {QUOTE_VALIDITY_DAYS} days. Prices exclude installation site preparation.",
              new_x="LMARGIN", new_y="NEXT", align="C")
 
     return bytes(pdf.output())
@@ -496,23 +498,14 @@ if df is not None:
     if selected_thickness:
         filtered_df = filtered_df[filtered_df['Thickness'].isin(selected_thickness)]
 
-    # 4. Color search
+    # 4. Color search — escape user input to prevent regex injection
     if search_term:
+        safe_term = re.escape(search_term)
         filtered_df = filtered_df[
-            filtered_df['Color'].str.contains(search_term, case=False, na=False)
-            | filtered_df['Brand'].str.contains(search_term, case=False, na=False)
-            | filtered_df['Product Variant'].str.contains(search_term, case=False, na=False)
+            filtered_df['Color'].str.contains(safe_term, case=False, na=False)
+            | filtered_df['Brand'].str.contains(safe_term, case=False, na=False)
+            | filtered_df['Product Variant'].str.contains(safe_term, case=False, na=False)
         ]
-
-    # 5. Budget range — calculate price once for all remaining rows
-    filtered_df['_temp_price'] = filtered_df['Unit_Cost'].apply(
-        lambda uc: calculate_cost(uc, sqft, total_sink_price)['total_with_tax']
-    )
-    filtered_df = filtered_df[
-        (filtered_df['_temp_price'] >= budget_min)
-        & (filtered_df['_temp_price'] <= budget_max)
-    ]
-    filtered_df = filtered_df.drop(columns=['_temp_price'])
 
     # ── Sort Results ───────────────────────────────────────────────────────────
     sort_by = st.selectbox(
@@ -525,16 +518,23 @@ if df is not None:
         help="Order the material list before selecting a slab",
     )
 
+    # 5. Compute price once — reused for both budget filtering and sorting
+    filtered_df = filtered_df.copy()
+    filtered_df['_price'] = filtered_df['Unit_Cost'].apply(
+        lambda uc: calculate_cost(uc, sqft, total_sink_price)['total_with_tax']
+    )
+    filtered_df = filtered_df[
+        (filtered_df['_price'] >= budget_min)
+        & (filtered_df['_price'] <= budget_max)
+    ]
+
     if sort_by in ("Price (Low to High)", "Price (High to Low)"):
-        filtered_df = filtered_df.copy()
-        filtered_df['_sort_price'] = filtered_df['Unit_Cost'].apply(
-            lambda uc: calculate_cost(uc, sqft, total_sink_price)['total_with_tax']
-        )
         ascending = sort_by == "Price (Low to High)"
-        filtered_df = filtered_df.sort_values('_sort_price', ascending=ascending)
-        filtered_df = filtered_df.drop(columns=['_sort_price'])
+        filtered_df = filtered_df.sort_values('_price', ascending=ascending)
     elif sort_by == "Available Size (Largest First)":
         filtered_df = filtered_df.sort_values('On Hand Qty', ascending=False)
+
+    filtered_df = filtered_df.drop(columns=['_price'])
 
     # ── Slab Selection ─────────────────────────────────────────────────────────
     with st.container(border=True):
@@ -666,12 +666,12 @@ if df is not None:
                 st.session_state.comparison_tray = []
                 st.rerun()
 
-        # Display comparison items in columns (up to 6 per row)
+        # Display comparison items in columns (up to MAX_COMPARISON_COLS per row)
         num_items = len(st.session_state.comparison_tray)
-        cols = st.columns(min(num_items, 6))
+        cols = st.columns(min(num_items, MAX_COMPARISON_COLS))
 
         for idx, item in enumerate(st.session_state.comparison_tray):
-            with cols[idx % 6]:
+            with cols[idx % MAX_COMPARISON_COLS]:
                 with st.container(border=True):
                     st.markdown(f"**{item['brand']} {item['color']}**")
                     st.write(f"{item['thickness']} • {item['sqft']:.0f} sf")
@@ -679,9 +679,8 @@ if df is not None:
                     if item.get('sinks'):
                         st.write("**Sinks:**")
                         for sink in item['sinks']:
-                            st.write(f"• {sink['type'].split('-')[0].strip()}: {sink['quantity']}x")
-                    elif item.get('sink'):
-                        st.write(f"Sink: {item['sink'].split('-')[0].strip()}")
+                            label = sink['type'].split('-')[0].strip() or sink['type']
+                            st.write(f"• {label}: {sink['quantity']}x")
 
                     st.markdown(f"### ${item['price']:,.2f}")
 
