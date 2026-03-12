@@ -15,48 +15,150 @@ st.set_page_config(
 # Custom CSS - Modern SaaS Dashboard Style
 st.markdown("""
 <style>
-    .stApp { background: #f8fafc; font-family: "Inter", sans-serif; }
+    .stApp { background: #f1f5f9; font-family: "Inter", sans-serif; }
 
     [data-testid="stVerticalBlockBorderWrapper"] > div {
         background-color: white !important;
         border: 1px solid #e2e8f0 !important;
-        border-radius: 12px !important;
+        border-radius: 14px !important;
         padding: 1.5rem !important;
-        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05) !important;
+        box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.08), 0 0 0 1px rgb(0 0 0 / 0.03) !important;
         margin-bottom: 1rem !important;
     }
+
+    /* Card title with optional step badge */
     .card-title {
-        font-size: 0.85rem;
+        font-size: 0.78rem;
         font-weight: 700;
-        color: #1e293b;
+        color: #64748b;
         margin-bottom: 1rem;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.07em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Numbered step circle */
+    .step-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+        background: #4f46e5;
+        color: white;
+        border-radius: 50%;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+
+    /* Result count pill */
+    .count-badge {
+        display: inline-block;
+        background: #ede9fe;
+        color: #5b21b6;
+        border-radius: 20px;
+        padding: 1px 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+    .count-badge-zero {
+        display: inline-block;
+        background: #fee2e2;
+        color: #991b1b;
+        border-radius: 20px;
+        padding: 1px 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+
+    /* Sub-heading inside a card */
+    .card-sub {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #475569;
+        margin: 0.75rem 0 0.4rem 0;
         display: block;
     }
+
+    /* Sink list row */
+    .sink-row {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 6px 10px;
+        margin-bottom: 4px;
+        font-size: 0.85rem;
+    }
+
+    /* No-items placeholder */
+    .empty-state {
+        background: #f8fafc;
+        border: 1.5px dashed #cbd5e1;
+        border-radius: 8px;
+        padding: 12px 16px;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        text-align: center;
+        margin-top: 4px;
+    }
+
     [data-testid="stMetricValue"] {
         color: #1e293b !important;
         font-weight: 700 !important;
-        font-size: 1.8rem !important;
+        font-size: 1.6rem !important;
     }
+    [data-testid="stMetricLabel"] {
+        font-size: 0.75rem !important;
+        color: #64748b !important;
+    }
+
     .large-price {
         text-align: center;
         padding: 2rem 1rem;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         border-radius: 12px;
         color: white !important;
-        margin: 1rem 0;
+        margin: 0.5rem 0 1rem 0;
     }
-    .large-price h1 { color: white !important; font-size: 3rem !important; margin: 0 !important; }
-    .large-price p  { color: white !important; opacity: 0.9; margin: 0 !important; }
-    .low-stock  { background: #fee2e2; border-left: 4px solid #dc2626; padding: 12px; border-radius: 4px; color: #991b1b !important; margin-bottom: 1rem; }
+    .large-price h1 { color: white !important; font-size: 2.8rem !important; margin: 0 !important; line-height: 1.1 !important; }
+    .large-price p  { color: rgba(255,255,255,0.85) !important; margin: 0 !important; font-size: 0.85rem !important; }
+    .large-price .price-sub { color: rgba(255,255,255,0.7) !important; font-size: 0.78rem !important; margin-top: 6px !important; display: block; }
+
+    .low-stock  { background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 6px; color: #991b1b !important; margin-bottom: 1rem; font-size: 0.85rem; }
     .good-margin { color: #059669 !important; font-weight: 700; }
     .low-margin  { color: #dc2626 !important; font-weight: 700; }
 
+    /* No-results state */
+    .no-results {
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        padding: 16px;
+        color: #92400e;
+        font-size: 0.875rem;
+    }
+
     /* Limit multiselect tag container height so it doesn't swallow the screen */
     [data-testid="stMultiSelect"] div[data-baseweb="select"] > div:first-child {
-        max-height: 150px !important;
+        max-height: 120px !important;
         overflow-y: auto !important;
+    }
+
+    /* Tighten gap between header logo and title */
+    .header-sub {
+        color: #64748b;
+        font-size: 0.9rem;
+        margin-top: -0.5rem;
+        margin-bottom: 0.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -347,9 +449,10 @@ with st.sidebar:
 # ── Header ─────────────────────────────────────────────────────────────────────
 col_logo, col_title = st.columns([1, 4])
 with col_logo:
-    st.image("https://i.ibb.co/kVXQt6v4/Gemini-Generated-Image-shnzslshnzslshnz.png", width=150)
+    st.image("https://i.ibb.co/kVXQt6v4/Gemini-Generated-Image-shnzslshnzslshnz.png", width=130)
 with col_title:
     st.title("🧱 Dead Stock Sales Tool")
+    st.markdown('<p class="header-sub">Configure your project, browse available slabs, and generate a customer quote in three steps.</p>', unsafe_allow_html=True)
 
 # ── Session State ──────────────────────────────────────────────────────────────
 if 'comparison_tray' not in st.session_state:
@@ -371,25 +474,35 @@ if df is not None:
     }).reset_index()
     grouped_df['Unit_Cost'] = grouped_df['Serialized On Hand Cost'] / grouped_df['On Hand Qty']
 
-    # ── Project Settings ───────────────────────────────────────────────────────
+    # ── Configure Project (sqft + sinks in one card) ───────────────────────────
     with st.container(border=True):
-        st.markdown('<span class="card-title">Project Settings</span>', unsafe_allow_html=True)
-        sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
+        st.markdown('<span class="card-title"><span class="step-badge">1</span> Configure Project</span>', unsafe_allow_html=True)
 
-    # ── Sink Selection ─────────────────────────────────────────────────────────
-    with st.container(border=True):
-        st.markdown('<span class="card-title">🚰 Sink Selection</span>', unsafe_allow_html=True)
+        # Square footage row
+        col_sqft, col_waste = st.columns([2, 1])
+        with col_sqft:
+            sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
+        with col_waste:
+            st.metric(
+                "Material Needed",
+                f"{sqft * WASTE_FACTOR:.1f} sf",
+                help=f"Includes {int((WASTE_FACTOR - 1) * 100)}% waste factor",
+            )
 
+        st.divider()
+
+        # Sink sub-section
+        st.markdown('<span class="card-sub">🚰 Sinks</span>', unsafe_allow_html=True)
         col_dropdown, col_add = st.columns([4, 1])
         with col_dropdown:
             sink_to_add = st.selectbox(
-                "Select Sink Model",
+                "Sink Model",
                 options=list(SINK_OPTIONS.keys()),
-                help="Choose a sink to add",
+                help="Choose a sink to add to the quote",
                 key="sink_selector",
+                label_visibility="collapsed",
             )
         with col_add:
-            st.markdown("<br>", unsafe_allow_html=True)
             if st.button("➕ Add Sink", use_container_width=True):
                 st.session_state.selected_sinks.append({
                     'type':     sink_to_add,
@@ -400,11 +513,16 @@ if df is not None:
 
         # Display selected sinks with quantity controls
         if st.session_state.selected_sinks:
-            st.markdown("**Selected Sinks:**")
             for idx, sink in enumerate(st.session_state.selected_sinks):
-                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
                 with col1:
-                    st.write(sink['type'])
+                    line_total = sink['price'] * sink['quantity']
+                    label = sink['type'].split('-')[0].strip() or sink['type']
+                    st.markdown(
+                        f'<div class="sink-row">{label}<br>'
+                        f'<small style="color:#64748b">${sink["price"]:,.0f} ea · ${line_total:,.2f} total</small></div>',
+                        unsafe_allow_html=True,
+                    )
                 with col2:
                     if st.button("➖", key=f"minus_sink_{idx}", use_container_width=True):
                         if sink['quantity'] > 1:
@@ -413,23 +531,23 @@ if df is not None:
                             st.session_state.selected_sinks.pop(idx)
                         st.rerun()
                 with col3:
-                    st.write(f"**{sink['quantity']}**")
+                    st.markdown(f"<div style='text-align:center;padding-top:8px;font-weight:700'>{sink['quantity']}</div>", unsafe_allow_html=True)
                 with col4:
                     if st.button("➕", key=f"plus_sink_{idx}", use_container_width=True):
                         st.session_state.selected_sinks[idx]['quantity'] += 1
                         st.rerun()
+        else:
+            st.markdown('<div class="empty-state">No sinks added — select a model above and click ➕ Add Sink</div>', unsafe_allow_html=True)
 
         total_sink_price = sum(
             s['price'] * s['quantity'] for s in st.session_state.selected_sinks
         )
         if total_sink_price > 0:
-            st.markdown(f"**Total Sink Cost: ${total_sink_price:,.2f}**")
-        else:
-            st.info("No sinks selected")
+            st.markdown(f"**Sink subtotal: ${total_sink_price:,.2f}**")
 
     # ── Filters ────────────────────────────────────────────────────────────────
     with st.container(border=True):
-        st.markdown('<span class="card-title">🔍 Filters</span>', unsafe_allow_html=True)
+        st.markdown('<span class="card-title"><span class="step-badge">2</span> Browse & Filter</span>', unsafe_allow_html=True)
 
         # Compute dynamic price range based on slabs that have sufficient stock
         temp_filtered = grouped_df[
@@ -447,20 +565,19 @@ if df is not None:
 
         # ── Dual-ended budget range slider ────────────────────────────────────
         budget_range = st.slider(
-            "💰 Customer Budget Range",
+            "💰 Customer Budget Range (incl. GST)",
             min_value=min_price,
             max_value=max_price,
-            value=(min_price, max_price),   # dual-ended
+            value=(min_price, max_price),
             step=100,
             help="Filter slabs by minimum and maximum customer total price (incl. tax)",
         )
         budget_min, budget_max = budget_range
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             all_brands = sorted(grouped_df['Brand'].unique())
-            # Default is empty → show all brands
             selected_brands = st.multiselect(
                 "Brand",
                 options=all_brands,
@@ -479,9 +596,20 @@ if df is not None:
 
         with col3:
             search_term = st.text_input(
-                "🔎 Search Colors",
-                placeholder="Type to search...",
-                help="Search by color name",
+                "🔎 Search",
+                placeholder="Brand, color, keyword…",
+                help="Search by brand, color name, or any keyword",
+            )
+
+        with col4:
+            sort_by = st.selectbox(
+                "Sort By",
+                options=[
+                    "Price (Low to High)",
+                    "Price (High to Low)",
+                    "Available Size (Largest First)",
+                ],
+                help="Order the material list",
             )
 
     # ── Apply Filters ──────────────────────────────────────────────────────────
@@ -507,17 +635,6 @@ if df is not None:
             | filtered_df['Product Variant'].str.contains(safe_term, case=False, na=False)
         ]
 
-    # ── Sort Results ───────────────────────────────────────────────────────────
-    sort_by = st.selectbox(
-        "Sort By",
-        options=[
-            "Price (Low to High)",
-            "Price (High to Low)",
-            "Available Size (Largest First)",
-        ],
-        help="Order the material list before selecting a slab",
-    )
-
     # 5. Compute price once — reused for both budget filtering and sorting
     filtered_df = filtered_df.copy()
     filtered_df['_price'] = filtered_df['Unit_Cost'].apply(
@@ -537,8 +654,17 @@ if df is not None:
     filtered_df = filtered_df.drop(columns=['_price'])
 
     # ── Slab Selection ─────────────────────────────────────────────────────────
+    mat_count = len(filtered_df)
+    if mat_count > 0:
+        badge = f'<span class="count-badge">{mat_count} available</span>'
+    else:
+        badge = '<span class="count-badge-zero">0 available</span>'
+
     with st.container(border=True):
-        st.markdown('<span class="card-title">Select Material</span>', unsafe_allow_html=True)
+        st.markdown(
+            f'<span class="card-title"><span class="step-badge">3</span> Select Material {badge}</span>',
+            unsafe_allow_html=True,
+        )
 
         filtered_df['display_name'] = filtered_df.apply(
             lambda row: f"{row['Brand']} {row['Color']} {row['Thickness']} ({row['On Hand Qty']:.1f} sf)",
@@ -546,13 +672,21 @@ if df is not None:
         )
         display_to_variant = dict(zip(filtered_df['display_name'], filtered_df['Product Variant']))
 
-        if len(filtered_df) > 0:
-            # Preserve sort order — don't re-sort the list alphabetically
+        if mat_count > 0:
             ordered_display_names = list(filtered_df['display_name'])
-            selected_display = st.selectbox("Select Slab", ordered_display_names)
+            selected_display = st.selectbox("Select Slab", ordered_display_names, label_visibility="collapsed")
             selected_variant = display_to_variant[selected_display]
         else:
-            st.warning("No materials match your filters. Try adjusting the filters above.")
+            active_filters = []
+            if selected_brands:
+                active_filters.append(f"brand filter ({', '.join(selected_brands)})")
+            if search_term:
+                active_filters.append(f'search "{search_term}"')
+            hint = f" Try removing the {' or '.join(active_filters)}." if active_filters else " Try widening the budget range or adjusting thickness."
+            st.markdown(
+                f'<div class="no-results">⚠️ No slabs match your current filters.{hint}</div>',
+                unsafe_allow_html=True,
+            )
             selected_variant = None
 
     # ── Results ────────────────────────────────────────────────────────────────
@@ -607,19 +741,30 @@ if df is not None:
             """, unsafe_allow_html=True)
 
             with st.expander("💰 Cost Breakdown"):
-                st.metric("Slab Cost (Internal IB)", f"${pricing['ib_cost']:,.2f}")
-                st.write(f"Customer Mat/Fab: ${pricing['customer_mat_fab']:,.2f}")
-                st.write(f"Customer Install: ${pricing['customer_ins']:,.2f}")
+                margin_pct = pricing['margin_pct']
+                margin_class = "good-margin" if margin_pct >= 18 else "low-margin"
+                margin_label = "✅ Healthy" if margin_pct >= 18 else "⚠️ Low"
+                st.markdown(
+                    f'Margin: <span class="{margin_class}">{margin_pct:.1f}% — {margin_label}</span>',
+                    unsafe_allow_html=True,
+                )
+                st.divider()
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.metric("Internal Cost (IB)", f"${pricing['ib_cost']:,.2f}")
+                with col_b:
+                    st.metric("Mat & Fab (Customer)", f"${pricing['customer_mat_fab']:,.2f}")
+                st.write(f"Installation: **${pricing['customer_ins']:,.2f}**")
                 if pricing['sink_price'] > 0:
                     st.write("**Sinks:**")
                     for sink in st.session_state.selected_sinks:
                         st.write(
                             f"  • {sink['type']}: ${sink['price']:,.2f}"
-                            f" × {sink['quantity']} = ${sink['price'] * sink['quantity']:,.2f}"
+                            f" × {sink['quantity']} = **${sink['price'] * sink['quantity']:,.2f}**"
                         )
-                    st.write(f"Total Sinks: ${pricing['sink_price']:,.2f}")
-                st.write(f"**Subtotal:** ${pricing['subtotal']:,.2f}")
-                st.write(f"**Total with Tax:** ${pricing['total_with_tax']:,.2f}")
+                    st.write(f"Sink total: **${pricing['sink_price']:,.2f}**")
+                st.write(f"Subtotal (excl. tax): **${pricing['subtotal']:,.2f}**")
+                st.write(f"GST (5%): **${pricing['subtotal'] * TAX_RATE:,.2f}**")
 
             # ── Download Quote as PDF ──────────────────────────────────────────
             pdf_bytes = generate_quote_pdf(
