@@ -1,871 +1,581 @@
-from datetime import datetime
-import streamlit as st
-import pandas as pd
-import re
-from fpdf import FPDF
+"""CounterPro: showroom tool for pricing in-stock slabs and building quotes.
 
-# --- 1. CONFIGURATION ---
+Run with:  streamlit run app.py
+Rates, sinks and branch details are in counterpro/config.py.
+"""
+from __future__ import annotations
+
+import hmac
+import html
+import os
+from datetime import datetime, timedelta
+from urllib.parse import quote_plus
+
+import pandas as pd
+import streamlit as st
+
+from counterpro import config, store
+from counterpro.config import BRANDING, RULES, SINKS, SINKS_BY_SKU
+from counterpro.inventory import (clean_slabs, drop_duplicate_serials, feed_report,
+                                  load_slabs, location_name,
+                                  slabs_for_job, summarize, thickness_value)
+from counterpro.moraware import NotAnInventoryPage, parse_inventory_html
+from counterpro.pricing import money, price_job
+from counterpro.quote import (Quote, QuoteOption, SinkLine, build_pdf,
+                              new_quote_number, to_rows)
+
 st.set_page_config(
-    page_title="Dead Stock Sales Tool",
-    page_icon="🧱",
+    page_title=BRANDING.app_name,
+    page_icon=":material/countertops:",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-# Custom CSS - Modern SaaS Dashboard Style
-st.markdown("""
+st.html("""
 <style>
-    .stApp { background: #f1f5f9; font-family: "Inter", sans-serif; }
+  :root { --ink:#1C2526; --muted:#5E6B6C; --rule:#CBD2CF; --tag:#F4C534; --slate:#17494D; }
+  .block-container { padding-top: 4.5rem; max-width: 1280px; }
+  h1, h2, h3 { letter-spacing: 0; }
 
-    [data-testid="stVerticalBlockBorderWrapper"] > div {
-        background-color: white !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 14px !important;
-        padding: 1.5rem !important;
-        box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.08), 0 0 0 1px rgb(0 0 0 / 0.03) !important;
-        margin-bottom: 1rem !important;
-    }
+  /* White panels on the stone background */
+  [class*="st-key-panel_"] { background:#fff; border-color:var(--rule); }
 
-    /* Card title with optional step badge */
-    .card-title {
-        font-size: 0.78rem;
-        font-weight: 700;
-        color: #64748b;
-        margin-bottom: 1rem;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
+  /* One slab = one row. A yellow edge marks slabs already on the quote. */
+  [class*="st-key-slab_"], [class*="st-key-slabq_"] {
+    background:#fff; border:1px solid var(--rule); border-left:6px solid var(--rule);
+    border-radius:3px; padding:0.8rem 1rem;
+  }
+  [class*="st-key-slabq_"] { border-left-color:var(--tag); }
 
-    /* Numbered step circle */
-    .step-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 20px;
-        height: 20px;
-        min-width: 20px;
-        background: #4f46e5;
-        color: white;
-        border-radius: 50%;
-        font-size: 0.7rem;
-        font-weight: 700;
-        letter-spacing: 0;
-        text-transform: none;
-    }
+  .cp-name { font-family:"Barlow Condensed","Barlow",sans-serif; font-weight:600;
+             font-size:1.45rem; line-height:1.15; color:var(--ink); }
+  .cp-meta { color:var(--muted); font-size:0.95rem; line-height:1.4; margin-top:2px; }
+  .cp-staff { color:var(--slate); font-size:0.85rem; margin-top:2px; }
+  .cp-price { text-align:right; white-space:nowrap; }
+  .cp-price b { font-family:"Barlow Condensed","Barlow",sans-serif; font-weight:700;
+                font-size:2.1rem; line-height:1; color:var(--ink);
+                font-variant-numeric:tabular-nums; display:block; }
+  .cp-price span { color:var(--muted); font-size:0.85rem; white-space:normal; display:block; }
 
-    /* Result count pill */
-    .count-badge {
-        display: inline-block;
-        background: #ede9fe;
-        color: #5b21b6;
-        border-radius: 20px;
-        padding: 1px 10px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0;
-        text-transform: none;
-    }
-    .count-badge-zero {
-        display: inline-block;
-        background: #fee2e2;
-        color: #991b1b;
-        border-radius: 20px;
-        padding: 1px 10px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0;
-        text-transform: none;
-    }
+  .cp-total { background:var(--tag); color:var(--ink); border-radius:3px; padding:0.9rem 1.1rem;
+              display:flex; justify-content:space-between; align-items:baseline; gap:1rem; }
+  .cp-total b { font-family:"Barlow Condensed","Barlow",sans-serif; font-weight:700;
+                font-size:2.4rem; line-height:1; font-variant-numeric:tabular-nums; }
+  .cp-lines { width:100%; border-collapse:collapse; margin:0.4rem 0 0.8rem; }
+  .cp-lines, .cp-lines tr, .cp-lines td { border:0 !important; background:transparent !important; }
+  .cp-lines td { padding:0.35rem 0 !important; border-bottom:1px solid var(--rule) !important; }
+  .cp-lines td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  .cp-empty { border:1.5px dashed var(--rule); border-radius:3px; padding:1rem; color:var(--muted); }
 
-    /* Sub-heading inside a card */
-    .card-sub {
-        font-size: 0.8rem;
-        font-weight: 600;
-        color: #475569;
-        margin: 0.75rem 0 0.4rem 0;
-        display: block;
-    }
-
-    /* Sink list row */
-    .sink-row {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        padding: 6px 10px;
-        margin-bottom: 4px;
-        font-size: 0.85rem;
-    }
-
-    /* No-items placeholder */
-    .empty-state {
-        background: #f8fafc;
-        border: 1.5px dashed #cbd5e1;
-        border-radius: 8px;
-        padding: 12px 16px;
-        color: #94a3b8;
-        font-size: 0.85rem;
-        text-align: center;
-        margin-top: 4px;
-    }
-
-    [data-testid="stMetricValue"] {
-        color: #1e293b !important;
-        font-weight: 700 !important;
-        font-size: 1.6rem !important;
-    }
-    [data-testid="stMetricLabel"] {
-        font-size: 0.75rem !important;
-        color: #64748b !important;
-    }
-
-    .large-price {
-        text-align: center;
-        padding: 2rem 1rem;
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        border-radius: 12px;
-        color: white !important;
-        margin: 0.5rem 0 1rem 0;
-    }
-    .large-price h1 { color: white !important; font-size: 2.8rem !important; margin: 0 !important; line-height: 1.1 !important; }
-    .large-price p  { color: rgba(255,255,255,0.85) !important; margin: 0 !important; font-size: 0.85rem !important; }
-    .large-price .price-sub { color: rgba(255,255,255,0.7) !important; font-size: 0.78rem !important; margin-top: 6px !important; display: block; }
-
-    .low-stock  { background: #fef2f2; border-left: 3px solid #ef4444; padding: 10px 14px; border-radius: 6px; color: #991b1b !important; margin-bottom: 1rem; font-size: 0.85rem; }
-    .good-margin { color: #059669 !important; font-weight: 700; }
-    .low-margin  { color: #dc2626 !important; font-weight: 700; }
-
-    /* No-results state */
-    .no-results {
-        background: #fffbeb;
-        border: 1px solid #fde68a;
-        border-radius: 8px;
-        padding: 16px;
-        color: #92400e;
-        font-size: 0.875rem;
-    }
-
-    /* Limit multiselect tag container height so it doesn't swallow the screen */
-    [data-testid="stMultiSelect"] div[data-baseweb="select"] > div:first-child {
-        max-height: 120px !important;
-        overflow-y: auto !important;
-    }
-
-    /* Tighten gap between header logo and title */
-    .header-sub {
-        color: #64748b;
-        font-size: 0.9rem;
-        margin-top: -0.5rem;
-        margin-bottom: 0.5rem;
-    }
+  @media (max-width: 640px) {
+    .cp-price { text-align:left; }
+    .block-container { padding-left:1rem; padding-right:1rem; }
+  }
 </style>
-""", unsafe_allow_html=True)
-
-# --- 2. CONSTANTS ---
-INSTALL_COST_PER_SQFT    = 21.0
-FABRICATION_COST_PER_SQFT = 16.0
-WASTE_FACTOR  = 1.20
-TAX_RATE      = 0.05
-
-# Pricing Controls
-IB_MATERIAL_MARKUP    = 1.05   # 5 % markup on raw material for IB
-IB_MIN_MARGIN         = 0.18   # Ensure IB is at least 18 % margin over raw costs
-IB_TO_CUSTOMER_MARKUP = 1.15   # Customer Mat+Fab is 15 % higher than IB
-
-# UI Controls
-MAX_COMPARISON_COLS = 6        # Max columns shown in the comparison tray
-QUOTE_VALIDITY_DAYS = 30       # Number of days a generated quote is valid
-
-# DATA SOURCES
-DATA_SOURCES = [
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vSkoSeMuPGqr5-JEBhHO5l0fFYlkfmbMUW-VU8UZEpR0pd4lSeyK74WHE47m1zYMg/pub?output=csv"
-]
-
-# --- 3. SINK DATA  (emojis added for quick visual scanning) ---
-SINK_OPTIONS = {
-    "✅ In-Stock/No Sink": 0.00,
-    # ── Kitchen Sinks – Standard Radius ──────────────────────────────
-    "🥣 50/50 Undermount Standard Radius - SKU 83742 (16 ga)": 300.00,
-    "🥣 Large Single Bowl Undermount Standard Radius - SKU 83744 (16 ga)": 325.00,
-    "🥣 Medium Single Bowl Undermount Standard Radius - SKU 83745 (18 ga)": 230.00,
-    "🥣 60/40 Undermount Standard Radius - SKU 83747 (16 ga)": 370.00,
-    "🥣 40/60 Undermount Standard Radius - SKU 83995 (16 ga)": 370.00,
-    # ── Bar Sinks – Standard Radius ───────────────────────────────────
-    "🍸 Large Bar Undermount Standard Radius - SKU 83993 (18 ga)": 250.00,
-    "🍸 Small Bar Undermount Standard Radius - SKU 83992 (18 ga)": 180.00,
-    # ── Kitchen Sinks – 15° Radius ────────────────────────────────────
-    "🥣 50/50 Undermount 15° Radius - SKU 83749 (18 ga)": 440.00,
-    "🥣 Large Single Bowl Undermount 15° Radius - SKU 83748 (18 ga)": 450.00,
-    "🥣 Medium Single Bowl Undermount 15° Radius - SKU 83750 (18 ga)": 400.00,
-    # ── Top-mount ─────────────────────────────────────────────────────
-    "🥣 Top-mount Double Bowl Standard Radius - SKU 85446 (18 ga)": 270.00,
-    # ── Vanity Sinks (White Porcelain) ────────────────────────────────
-    "🛁 Large Rectangular Undermount Vanity - SKU 84020 (Porcelain)": 105.00,
-    "🛁 Medium Rectangular Undermount Vanity - SKU 84022 (Porcelain)": 105.00,
-    "🛁 Large Oval Undermount Vanity - SKU 84024 (Porcelain)": 89.00,
-    "🛁 Medium Oval Undermount Vanity - SKU 84026 (Porcelain)": 89.00,
-}
+""")
 
 
-# --- 4. PRICING LOGIC (unchanged) ---
-def calculate_cost(unit_cost, project_sqft, sink_price=0.0):
-    """
-    Revised pricing logic:
-    1. Calculate Raw Direct Cost (Material + Fab).
-    2. Calculate IB (Material marked up 5 %, enforcing 18 % floor on total).
-    3. Calculate Customer Material + Fab (Fixed 15 % higher than IB).
-    4. Add Sink Price to Customer Total.
-    """
-    uc         = float(unit_cost)
-    sq_finished = float(project_sqft)
-    sq_with_waste = sq_finished * WASTE_FACTOR
-    sink_price = float(sink_price)
-
-    # 1. RAW DIRECT COSTS
-    raw_material_cost = uc * sq_with_waste
-    raw_fab_cost      = FABRICATION_COST_PER_SQFT * sq_finished
-    total_direct_cost = raw_material_cost + raw_fab_cost
-
-    # 2. INTERNAL BASE (IB) CALCULATION
-    # Candidate A: Material marked up by 5 % + raw fabrication
-    ib_candidate_markup = (raw_material_cost * IB_MATERIAL_MARKUP) + raw_fab_cost
-    # Candidate B: Enforce the 18 % margin floor on direct costs
-    ib_candidate_floor  = total_direct_cost / (1 - IB_MIN_MARGIN)
-    ib_cost = max(ib_candidate_markup, ib_candidate_floor)
-
-    # 3. CUSTOMER PRICING
-    customer_mat_fab_total = ib_cost * IB_TO_CUSTOMER_MARKUP
-    customer_ins_cost      = INSTALL_COST_PER_SQFT * sq_finished
-
-    slab_subtotal = customer_mat_fab_total + customer_ins_cost
-    subtotal      = slab_subtotal + sink_price
-
-    # Analytics
-    profit     = slab_subtotal - (total_direct_cost + (INSTALL_COST_PER_SQFT * sq_finished))
-    margin_pct = (profit / slab_subtotal * 100) if slab_subtotal > 0 else 0
-
-    return {
-        "customer_mat_fab": customer_mat_fab_total,
-        "customer_ins":     customer_ins_cost,
-        "sink_price":       sink_price,
-        "slab_subtotal":    slab_subtotal,
-        "subtotal":         subtotal,
-        "ib_cost":          ib_cost,
-        "margin_pct":       margin_pct,
-        "total_with_tax":   subtotal * (1 + TAX_RATE),
-    }
-
-
-# --- 5. PARSING HELPER (unchanged) ---
-def parse_product_variant(variant_str):
-    """Parse Product Variant to extract Brand, Color, and Thickness."""
-    try:
-        cleaned = re.sub(r'^\d+\s*-\s*', '', str(variant_str))
-
-        brand_match = re.match(r'^([A-Za-z\s&]+)', cleaned)
-        brand = brand_match.group(1).strip() if brand_match else "Unknown"
-
-        thickness_match = re.search(r'(\d+\.?\d*cm)', cleaned, re.IGNORECASE)
-        thickness = thickness_match.group(1) if thickness_match else ""
-
-        color_str = re.sub(r'\([^)]*\)', '', cleaned)
-        color_str = re.sub(r'#\S+', '', color_str)
-        color_str = re.sub(r'\d+\.?\d*cm', '', color_str, flags=re.IGNORECASE)
-        color_str = re.sub(r'\s+', ' ', color_str).strip()
-        if brand in color_str:
-            color_str = color_str.replace(brand, '').strip()
-        color = color_str if color_str else "Unknown"
-
-        return brand, color, thickness
-    except (ValueError, AttributeError, TypeError):
-        return "Unknown", str(variant_str), ""
-
-
-# --- 6. DATA FETCHING  (cached for 60 s) ---
-@st.cache_data(ttl=60)
-def fetch_data():
-    """Fetch inventory data from Google Sheets. Cached for 60 seconds."""
-    all_dfs = []
-    for url in DATA_SOURCES:
+# --- Data -------------------------------------------------------------------
+@st.cache_data(ttl=config.CACHE_SECONDS, show_spinner="Loading slab inventory")
+def fetch(sources: tuple[str, ...], upload_stamp: float):
+    """Inventory for everyone using the app. An uploaded Moraware page wins over
+    the feed; `upload_stamp` changes when a new one is saved, which refreshes this."""
+    snapshot = store.load() if upload_stamp else None
+    if snapshot is not None:
         try:
-            df = pd.read_csv(url)
-            df.columns = df.columns.str.strip()
-            if 'Product Variant' in df.columns:
-                df['On Hand Qty'] = pd.to_numeric(
-                    df['On Hand Qty'].astype(str).str.replace(r'[$,]', '', regex=True),
-                    errors='coerce'
-                )
-                df['Serialized On Hand Cost'] = pd.to_numeric(
-                    df['Serialized On Hand Cost'].astype(str).str.replace(r'[$,]', '', regex=True),
-                    errors='coerce'
-                )
-                all_dfs.append(df)
-        except Exception as exc:
-            st.warning(f"⚠️ Failed to load data source: `{url}`\n\nError: {exc}")
-
-    if not all_dfs:
-        return None
-
-    df = pd.concat(all_dfs, ignore_index=True)
-    df = df[df['On Hand Qty'] > 0].copy()
-    df['Unit_Cost'] = df['Serialized On Hand Cost'] / df['On Hand Qty']
-
-    parsed      = df['Product Variant'].apply(parse_product_variant)
-    df['Brand']     = parsed.apply(lambda x: x[0])
-    df['Color']     = parsed.apply(lambda x: x[1])
-    df['Thickness'] = parsed.apply(lambda x: x[2])
-
-    return df
+            slabs = drop_duplicate_serials(clean_slabs(snapshot.rows))
+            return slabs, [], datetime.now(), snapshot
+        except Exception as exc:       # a damaged upload must not take the app down
+            result = load_slabs(sources)
+            return result.slabs, [f"Uploaded inventory could not be read: {exc}", *result.errors], datetime.now(), None
+    result = load_slabs(sources)
+    return result.slabs, result.errors, datetime.now(), None
 
 
-# --- 7. PDF GENERATION ---
-def _pdf_safe(text: str) -> str:
-    """
-    Strip characters outside latin-1 (e.g. emoji, em-dashes) so fpdf2's
-    built-in Helvetica font doesn't raise FPDFUnicodeEncodingException.
-    Replace common typographic chars with ASCII equivalents first, then
-    silently drop anything that still can't encode.
-    """
-    replacements = {
-        "\u2014": "-",   # em dash  —
-        "\u2013": "-",   # en dash  –
-        "\u00d7": "x",   # multiplication sign ×  (already latin-1, but keep explicit)
-    }
-    for orig, repl in replacements.items():
-        text = text.replace(orig, repl)
-    # Drop everything outside latin-1 (emoji, etc.)
-    return text.encode("latin-1", errors="ignore").decode("latin-1")
+def staff_code() -> str:
+    code = config.staff_code()
+    if not code:
+        try:
+            code = str(st.secrets.get("staff_code", "")).strip()
+        except Exception:              # no secrets file
+            code = ""
+    return code
 
 
-def generate_quote_pdf(slab_name, sqft, sinks, pricing):
-    """Generate a basic quote PDF using fpdf2. Returns bytes."""
-    pdf = FPDF()
-    pdf.add_page()
-
-    # Header
-    pdf.set_font("Helvetica", "B", 20)
-    pdf.set_fill_color(79, 70, 229)   # Indigo brand colour
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 14, "CounterPro - Customer Quote", new_x="LMARGIN", new_y="NEXT", align="C", fill=True)
-    pdf.ln(4)
-
-    # Reset colours for body
-    pdf.set_text_color(30, 41, 59)
-
-    # Date
-    pdf.set_font("Helvetica", size=9)
-    pdf.set_text_color(100, 116, 139)
-    pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%B %d, %Y  %H:%M')}", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(4)
-
-    # Section: Slab
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.set_text_color(30, 41, 59)
-    pdf.cell(0, 8, "SLAB DETAILS", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_draw_color(226, 232, 240)
-    pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 180, pdf.get_y())
-    pdf.ln(2)
-
-    pdf.set_font("Helvetica", size=10)
-    pdf.cell(50, 7, "Material:", new_x="RIGHT", new_y="TOP")
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.multi_cell(0, 7, _pdf_safe(slab_name))
-    pdf.set_font("Helvetica", size=10)
-    pdf.cell(50, 7, "Square Footage:", new_x="RIGHT", new_y="TOP")
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 7, f"{sqft:.1f} sq ft", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(4)
-
-    # Section: Sinks
-    if sinks:
-        pdf.set_font("Helvetica", "B", 11)
-        pdf.set_text_color(30, 41, 59)
-        pdf.cell(0, 8, "SINKS", new_x="LMARGIN", new_y="NEXT")
-        pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 180, pdf.get_y())
-        pdf.ln(2)
-        pdf.set_font("Helvetica", size=10)
-        for sink in sinks:
-            line_total = sink['price'] * sink['quantity']
-            # _pdf_safe strips emoji prefixes and replaces em/en dashes
-            sink_label = _pdf_safe(sink['type'])
-            pdf.cell(0, 6,
-                     f"  {sink_label}  x{sink['quantity']}  -  ${line_total:,.2f}",
-                     new_x="LMARGIN", new_y="NEXT")
-        pdf.ln(4)
-
-    # Section: Pricing summary
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.set_text_color(30, 41, 59)
-    pdf.cell(0, 8, "PRICING SUMMARY", new_x="LMARGIN", new_y="NEXT")
-    pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 180, pdf.get_y())
-    pdf.ln(2)
-
-    pdf.set_font("Helvetica", size=10)
-    rows = [
-        ("Material & Fabrication",  f"${pricing['customer_mat_fab']:,.2f}"),
-        ("Installation",             f"${pricing['customer_ins']:,.2f}"),
-        ("Sinks",                    f"${pricing['sink_price']:,.2f}"),
-        ("Subtotal",                 f"${pricing['subtotal']:,.2f}"),
-        ("GST (5%)",                 f"${pricing['subtotal'] * TAX_RATE:,.2f}"),
-    ]
-    col_w = 90
-    for label, value in rows:
-        pdf.cell(col_w, 7, label, new_x="RIGHT", new_y="TOP")
-        pdf.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT", align="R")
-
-    # Total — highlighted row
-    pdf.ln(2)
-    pdf.set_fill_color(79, 70, 229)
-    pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(col_w, 9, "TOTAL (incl. GST)", fill=True, new_x="RIGHT", new_y="TOP")
-    pdf.cell(0,    9, f"${pricing['total_with_tax']:,.2f}", fill=True,
-             align="R", new_x="LMARGIN", new_y="NEXT")
-
-    # Footer
-    pdf.ln(10)
-    pdf.set_text_color(148, 163, 184)
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.cell(0, 5, f"This quote is valid for {QUOTE_VALIDITY_DAYS} days. Prices exclude installation site preparation.",
-             new_x="LMARGIN", new_y="NEXT", align="C")
-
-    return bytes(pdf.output())
+def esc(value: object) -> str:
+    return html.escape(str(value))
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# UI EXECUTION
-# ═══════════════════════════════════════════════════════════════════════════════
+def md(text: str) -> str:
+    """Streamlit reads $...$ as maths. Escape dollar signs in markdown text."""
+    return text.replace("$", "\\$")
 
-# ── Sidebar: manual cache refresh ──────────────────────────────────────────────
+
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+# --- Session state ----------------------------------------------------------
+ss = st.session_state
+ss.setdefault("sinks", {})            # sku -> quantity
+ss.setdefault("quote", [])            # product variants on the quote, in order
+ss.setdefault("quote_number", new_quote_number())
+ss.setdefault("shown", config.PAGE_SIZE)
+
+
+def add_sink():
+    sku = ss["sink_pick"].sku
+    ss["sinks"][sku] = ss["sinks"].get(sku, 0) + 1
+
+
+def set_sink_qty(sku: str):
+    qty = int(ss.get(f"sinkqty_{sku}") or 0)
+    if qty <= 0:
+        ss["sinks"].pop(sku, None)
+    else:
+        ss["sinks"][sku] = qty
+
+
+def toggle_quote(variant: str):
+    if variant in ss["quote"]:
+        ss["quote"].remove(variant)
+    elif len(ss["quote"]) < BRANDING.max_quote_options:
+        ss["quote"].append(variant)
+
+
+def new_quote():
+    ss["quote"] = []
+    ss["sinks"] = {}
+    ss["quote_number"] = new_quote_number()
+    for key in ("customer_name", "customer_contact", "project"):
+        ss[key] = ""
+
+
+def reset_paging():
+    ss["shown"] = config.PAGE_SIZE
+
+
+# --- Sidebar: staff controls ------------------------------------------------
+CODE = staff_code()
+ss.setdefault("unlocked", False)
+ss.setdefault("upload_round", 0)
+unlocked = ss["unlocked"] or not CODE
+
 with st.sidebar:
-    st.markdown("### ⚙️ Data Controls")
-    if st.button("🔄 Refresh Inventory", use_container_width=True, type="primary"):
-        st.cache_data.clear()
+    st.subheader("Staff")
+    if CODE and not ss["unlocked"]:
+        with st.form("unlock", border=False):
+            attempt = st.text_input("Staff code", type="password")
+            if st.form_submit_button("Unlock", width="stretch"):
+                if hmac.compare_digest(attempt.strip().encode(), CODE.encode()):
+                    ss["unlocked"] = True
+                    st.rerun()
+                st.error("That code is not right.")
+    staff = st.toggle("Show cost and margin", key="staff", disabled=not unlocked,
+                      help="Adds internal numbers to the slab list and details. "
+                           "They never appear on the quote PDF.") and unlocked
+    if st.button("Refresh inventory", icon=":material/refresh:", width="stretch"):
+        fetch.clear()
         st.rerun()
-    st.caption("Inventory data is cached for 60 seconds. Click above to force an immediate refresh.")
 
-# ── Header ─────────────────────────────────────────────────────────────────────
-col_logo, col_title = st.columns([1, 4])
-with col_logo:
-    st.image("https://i.ibb.co/kVXQt6v4/Gemini-Generated-Image-shnzslshnzslshnz.png", width=130)
-with col_title:
-    st.title("🧱 Dead Stock Sales Tool")
-    st.markdown('<p class="header-sub">Configure your project, browse available slabs, and generate a customer quote in three steps.</p>', unsafe_allow_html=True)
+slabs, load_errors, loaded_at, snapshot = fetch(config.data_sources(), store.stamp())
 
-# ── Session State ──────────────────────────────────────────────────────────────
-if 'comparison_tray' not in st.session_state:
-    st.session_state.comparison_tray = []
-if 'selected_sinks' not in st.session_state:
-    st.session_state.selected_sinks = []
+if slabs is None or slabs.empty:
+    st.title(BRANDING.app_name)
+    st.error("The slab inventory could not be loaded, so nothing can be priced right now. "
+             "Check the connection, then choose Refresh inventory in the sidebar, "
+             "or upload a saved Moraware inventory page there.")
+    for err in load_errors:
+        st.caption(err)
+    st.stop()
 
-# ── Fetch Data ─────────────────────────────────────────────────────────────────
-df = fetch_data()
+products = summarize(slabs)
+slab_lists = {v: list(zip(g["serial"], g["available"])) for v, g in slabs.groupby("variant", sort=False)}
+slab_detail = {(r.variant, r.serial): (r.dimensions, r.bin) for r in slabs.itertuples()}
 
-if df is not None:
-    # Group by Product Variant and calculate totals
-    grouped_df = df.groupby('Product Variant').agg({
-        'On Hand Qty':              'sum',
-        'Serialized On Hand Cost':  'sum',
-        'Brand':                    'first',
-        'Color':                    'first',
-        'Thickness':                'first',
-    }).reset_index()
-    grouped_df['Unit_Cost'] = grouped_df['Serialized On Hand Cost'] / grouped_df['On Hand Qty']
+def upload_panel():
+    """Staff replace the inventory with a page saved from Moraware."""
+    st.divider()
+    st.subheader("Inventory source")
+    if snapshot is not None:
+        age = datetime.now() - snapshot.saved_at
+        st.caption(f"Moraware page uploaded {snapshot.saved_at:%b} {snapshot.saved_at.day} at "
+                   f"{snapshot.saved_at:%H:%M}" + "".join(f". {k}: {v}" for k, v in snapshot.filters.items()
+                                                          if k in ("Product",) and v) + ".")
+        if age > timedelta(days=config.UPLOAD_STALE_DAYS):
+            st.warning(f"This inventory is {age.days} days old. Slabs may have sold since.")
+    else:
+        st.caption("Reading the spreadsheet feed.")
 
-    # ── Configure Project (sqft + sinks in one card) ───────────────────────────
-    with st.container(border=True):
-        st.markdown('<span class="card-title"><span class="step-badge">1</span> Configure Project</span>', unsafe_allow_html=True)
+    if not CODE:
+        st.caption("Uploads are off until a staff code is set (COUNTERPRO_STAFF_CODE).")
+        return
+    if not ss["unlocked"]:
+        st.caption("Unlock with the staff code to upload inventory.")
+        return
 
-        # Square footage row
-        col_sqft, col_waste = st.columns([2, 1])
-        with col_sqft:
-            sqft = st.number_input("Finished Sq Ft", 1.0, 500.0, 35.0, step=1.0, key="sqft_input")
-        with col_waste:
-            st.metric(
-                "Material Needed",
-                f"{sqft * WASTE_FACTOR:.1f} sf",
-                help=f"Includes {int((WASTE_FACTOR - 1) * 100)}% waste factor",
-            )
+    files = st.file_uploader(
+        "Update from Moraware", type=["html", "htm"], accept_multiple_files=True,
+        key=f"upload_{ss['upload_round']}",
+        help="In Moraware open the inventory view, save the page (Ctrl+S, 'Webpage, HTML only'), "
+             "then drop the file here. Add one file per view if stock is split across views.")
+    if files:
+        frames, filters, names, problems = [], {}, [], []
+        for f in files:
+            if f.size > config.UPLOAD_MAX_MB * 1024 * 1024:
+                problems.append(f"{f.name} is larger than {config.UPLOAD_MAX_MB} MB.")
+                continue
+            try:
+                rows, info = parse_inventory_html(f.getvalue().decode("utf-8", errors="replace"))
+                clean_slabs(rows)                                   # prove it is usable before saving
+            except (NotAnInventoryPage, ValueError) as exc:
+                problems.append(f"{f.name}: {exc}")
+                continue
+            frames.append(rows)
+            names.append(f.name)
+            for k, v in info["filters"].items():
+                filters[k] = f"{filters[k]}; {v}" if k in filters and v not in filters[k] else v
+            if info["unsized"]:
+                problems.append(f"{f.name}: {plural(info['unsized'], 'slab')} with no readable size left out.")
+        for problem in problems:
+            st.warning(problem)
+        if frames:
+            raw = pd.concat(frames, ignore_index=True)
+            new = drop_duplicate_serials(clean_slabs(raw))
+            before, after = set(slabs["serial"]) - {""}, set(new["serial"]) - {""}
+            st.markdown(f"**{plural(len(new), 'slab')}, {plural(new['variant'].nunique(), 'product')}** "
+                        f"in the upload. {len(after - before)} not in the current list, "
+                        f"{len(before - after)} in the current list but not here.")
+            gone = slabs[slabs["serial"].isin(before - after)]
+            lost_sites = sorted(set(gone["location"]) - set(new["location"]))
+            if lost_sites:
+                st.warning("The upload has no slabs for " + ", ".join(location_name(c) for c in lost_sites)
+                           + ". They will disappear from the list.")
+            if st.button("Use this inventory", type="primary", width="stretch"):
+                store.save(raw, names, filters)
+                ss["upload_round"] += 1
+                fetch.clear()
+                st.rerun()
+    if snapshot is not None and st.button("Go back to the spreadsheet feed", width="stretch"):
+        store.clear()
+        fetch.clear()
+        st.rerun()
+
+
+with st.sidebar:
+    report = feed_report(slabs)
+    st.caption(
+        f"{report['slabs']} slabs across {report['products']} products"
+        + ("." if snapshot is not None else
+           f", loaded {loaded_at:%H:%M}. Refreshes every {config.CACHE_SECONDS} seconds.")
+    )
+    for code, count in sorted(report["by_location"].items()):
+        st.caption(f"{location_name(code)}: {plural(count, 'slab')}")
+    if report["allocated_slabs"]:
+        st.caption(f"{plural(report['allocated_slabs'], 'slab')} allocated to other jobs and not offered.")
+    for err in load_errors:
+        st.warning(f"A feed did not load: {err}")
+    if report["unparsed"]:
+        with st.expander(f"{plural(len(report['unparsed']), 'name')} not fully recognised"):
+            for name in report["unparsed"]:
+                st.caption(name)
+    upload_panel()
+
+
+# --- Header -----------------------------------------------------------------
+logo_url = os.environ.get("COUNTERPRO_LOGO_URL", BRANDING.logo_url)
+with st.container(horizontal=True, vertical_alignment="center"):
+    if logo_url:
+        st.image(logo_url, width=64)
+    st.title(f"{BRANDING.app_name} in-stock slabs", anchor=False)
+st.caption(f"{BRANDING.company}, {BRANDING.branch}. Enter the project size, pick slabs, and print a quote.")
+
+main, side = st.columns([7, 4], gap="large")
+
+# --- Project ----------------------------------------------------------------
+with main:
+    with st.container(border=True, key="panel_project"):
+        st.subheader("Project", anchor=False)
+        c_sqft, c_note = st.columns([1, 2], vertical_alignment="bottom")
+        with c_sqft:
+            sqft = st.number_input("Finished area (sq ft)", min_value=1.0, max_value=config.SQFT_MAX,
+                                   value=config.SQFT_DEFAULT, step=1.0, format="%.1f", key="sqft",
+                                   on_change=reset_paging)
+        needed = sqft * RULES.waste_factor
+        with c_note:
+            st.caption(f"Needs {needed:,.1f} sq ft of slab, which includes "
+                       f"{(RULES.waste_factor - 1) * 100:.0f}% for cutting waste.")
+
+        with st.container(horizontal=True, vertical_alignment="bottom"):
+            st.selectbox("Sinks", options=SINKS, key="sink_pick",
+                         format_func=lambda s: f"{s.category}: {s.label}, {money(s.price, cents=False)}")
+            st.button("Add sink", on_click=add_sink)
+
+        for sku, qty in list(ss["sinks"].items()):
+            sink = SINKS_BY_SKU[sku]
+            c_name, c_qty = st.columns([4, 1], vertical_alignment="center")
+            c_name.markdown(md(f"{sink.label}  \n:gray[{money(sink.price)} each, {money(sink.price * qty)} total]"))
+            c_qty.number_input(f"Quantity of {sink.name}", min_value=0, max_value=20, value=qty, step=1,
+                               key=f"sinkqty_{sku}", on_change=set_sink_qty, args=(sku,),
+                               label_visibility="collapsed", help="Set to 0 to remove")
+
+sink_lines = [SinkLine(sku, SINKS_BY_SKU[sku].label, SINKS_BY_SKU[sku].price, qty)
+              for sku, qty in ss["sinks"].items()]
+sinks_total = sum(s.total for s in sink_lines)
+
+# --- Price every product for this project ----------------------------------
+picks = {v: slabs_for_job(slab_lists[v], needed) for v in products["variant"]}
+prices = {row.variant: price_job(row.unit_cost, sqft, sinks_total) for row in products.itertuples()}
+products["fits"] = products["variant"].map(lambda v: picks[v] is not None)
+products["total"] = products["variant"].map(lambda v: prices[v].total)
+products["slabs_used"] = products["variant"].map(lambda v: len(picks[v]) if picks[v] is not None else 0)
+by_variant = products.set_index("variant")
+fitting = products[products["fits"]]
+
+
+def option_for(variant: str) -> QuoteOption:
+    row = by_variant.loc[variant]
+    used = picks[variant] or []
+    return QuoteOption(name=row["name"], spec=row["spec"], location=location_name(row["location"]),
+                       price=prices[variant], slabs_used=len(used),
+                       serials=tuple(p.serial for p in used if p.serial))
+
+
+# --- Slab details -----------------------------------------------------------
+@st.dialog("Slab details", width="medium")
+def show_details(variant: str):
+    row, price, used = by_variant.loc[variant], prices[variant], picks[variant] or []
+    st.markdown(f'<div class="cp-name">{esc(row["name"])}</div>'
+                f'<div class="cp-meta">{esc(", ".join(b for b in (row["spec"], location_name(row["location"])) if b))}'
+                f'{(", colour " + esc(row["color_code"])) if row["color_code"] else ""}</div>',
+                unsafe_allow_html=True)
+    lines = [("Material and fabrication", price.material_fab), ("Installation", price.install)]
+    if price.sinks:
+        lines.append(("Sinks", price.sinks))
+    lines += [("Subtotal", price.subtotal), (f"GST ({RULES.tax_rate * 100:g}%)", price.tax)]
+    st.markdown('<table class="cp-lines">' + "".join(
+        f"<tr><td>{esc(label)}</td><td>{money(value)}</td></tr>" for label, value in lines)
+        + "</table>"
+        f'<div class="cp-total"><span>Total with GST for {sqft:,.1f} sq ft</span><b>{money(price.total)}</b></div>',
+        unsafe_allow_html=True)
+
+    st.markdown(f"**In stock:** {plural(int(row['slab_count']), 'slab')}, "
+                f"{row['available']:,.1f} sq ft. This project uses {plural(len(used), 'slab')}.")
+    used_serials = {p.serial for p in used}
+    stock = pd.DataFrame([
+        {"Serial": serial or "(none)", "Sq ft": round(area, 1),
+         "Size": slab_detail.get((variant, serial), ("", ""))[0],
+         "Yard location": slab_detail.get((variant, serial), ("", ""))[1],
+         "For this project": "Yes" if serial in used_serials else ""}
+        for serial, area in slab_lists[variant] if area > 0
+    ])
+    stock = stock[[c for c in stock.columns if c in ("Serial", "Sq ft", "For this project")
+                   or stock[c].astype(bool).any()]]
+    st.dataframe(stock, hide_index=True, width="stretch")
+    query = quote_plus(f"{row['brand']} {row['color']} countertop installed")
+    st.link_button("See installed photos", f"https://www.google.com/search?tbm=isch&q={query}",
+                   icon=":material/image_search:")
+
+    if ss.get("staff"):
+        st.divider()
+        st.markdown("**Staff only**")
+        healthy = price.margin_pct >= RULES.healthy_margin_pct
+        a, b, c = st.columns(3)
+        a.metric("Slab cost per sq ft", money(row["unit_cost"]))
+        b.metric("Internal base (IB)", money(price.ib_cost))
+        c.metric("Margin", f"{price.margin_pct:.1f}%")
+        st.caption(md(
+            f"Raw material and fabrication {money(price.direct_cost)}. Profit {money(price.profit)} "
+            f"on {money(price.slab_subtotal)} before sinks and GST. "
+            + ("" if healthy else f"Below the {RULES.healthy_margin_pct:g}% guide: installation is charged at "
+               "cost, so low-cost slabs carry a thinner margin on the whole job.")
+        ))
+        if row["tags"]:
+            st.caption(f"Feed codes: {row['tags']}")
+
+
+# --- Browse -----------------------------------------------------------------
+with main:
+    with st.container(border=True, key="panel_filters"):
+        st.subheader("Find a slab", anchor=False)
+        f1, f2 = st.columns([3, 2])
+        search = f1.text_input("Search", placeholder="Colour, brand or code", key="search",
+                               on_change=reset_paging)
+        sort_by = f2.selectbox("Sort by", ["Price, low to high", "Price, high to low",
+                                           "Most in stock", "Name"], key="sort")
+
+        locations = sorted(products["location"].unique(),
+                           key=lambda c: (c != config.HOME_LOCATION, c))
+        f3, f4 = st.columns(2)
+        picked_locations = f3.pills("Location", locations, selection_mode="multi",
+                                    format_func=location_name, key="locations",
+                                    on_change=reset_paging) if len(locations) > 1 else []
+        thicknesses = sorted((t for t in products["thickness"].unique() if t),
+                             key=thickness_value, reverse=True)
+        picked_thickness = f4.pills("Thickness", thicknesses, selection_mode="multi",
+                                    key="thickness", on_change=reset_paging)
+        picked_brands = st.multiselect("Brand", sorted(products["brand"].unique()), key="brands",
+                                       placeholder="All brands", on_change=reset_paging)
+
+        # Budget range follows the project: bounds move with size and sinks.
+        if len(fitting):
+            lo = int(fitting["total"].min() // 100) * 100
+            hi = int(fitting["total"].max() // 100 + 1) * 100
+        else:
+            lo, hi = 0, 100
+        prev_bounds = ss.get("budget_bounds")
+        current = ss.get("budget")
+        if current is None or prev_bounds is None or tuple(current) == tuple(prev_bounds):
+            ss["budget"] = (lo, hi)                      # untouched slider stays wide open
+        else:
+            a, b = max(lo, min(current[0], hi)), max(lo, min(current[1], hi))
+            ss["budget"] = (a, b) if a < b else (lo, hi)
+        ss["budget_bounds"] = (lo, hi)
+        budget_lo, budget_hi = st.slider("Budget, total with GST", min_value=lo, max_value=hi,
+                                         step=100, format="$%d", key="budget", on_change=reset_paging)
+
+    shown = fitting
+    if picked_locations:
+        shown = shown[shown["location"].isin(picked_locations)]
+    if picked_thickness:
+        shown = shown[shown["thickness"].isin(picked_thickness)]
+    if picked_brands:
+        shown = shown[shown["brand"].isin(picked_brands)]
+    if search.strip():
+        term = search.strip()
+        shown = shown[shown["variant"].str.contains(term, case=False, regex=False, na=False)
+                      | shown["name"].str.contains(term, case=False, regex=False, na=False)]
+    shown = shown[(shown["total"] >= budget_lo) & (shown["total"] <= budget_hi)]
+
+    if sort_by == "Price, low to high":
+        shown = shown.sort_values(["total", "name"])
+    elif sort_by == "Price, high to low":
+        shown = shown.sort_values(["total", "name"], ascending=[False, True])
+    elif sort_by == "Most in stock":
+        shown = shown.sort_values(["available", "name"], ascending=[False, True])
+    else:
+        shown = shown.sort_values(["name", "thickness"])
+
+    too_small = len(products) - len(fitting)
+    summary = f"{plural(len(shown), 'slab option')} for {sqft:,.1f} sq ft"
+    if too_small:
+        summary += f". {too_small} more in stock are too small for this project."
+    st.markdown(f"**{summary}**")
+
+    if shown.empty:
+        hints = []
+        if search.strip():
+            hints.append("clear the search")
+        if picked_brands or picked_thickness or picked_locations:
+            hints.append("remove a filter")
+        if (budget_lo, budget_hi) != (lo, hi):
+            hints.append("widen the budget")
+        if not hints:
+            hints.append("reduce the finished area")
+        st.markdown(f'<div class="cp-empty">Nothing matches. Try to {" or ".join(hints)}.</div>',
+                    unsafe_allow_html=True)
+
+    quote_full = len(ss["quote"]) >= BRANDING.max_quote_options
+    for i, row in enumerate(shown.head(ss["shown"]).itertuples()):
+        price = prices[row.variant]
+        in_quote = row.variant in ss["quote"]
+        with st.container(key=f"{'slabq' if in_quote else 'slab'}_{i}"):
+            c_info, c_price = st.columns([5, 2], vertical_alignment="center")
+            stock = f"{plural(int(row.slab_count), 'slab')} in stock"
+            if row.slabs_used > 1:
+                stock += f", this project uses {row.slabs_used}"
+            meta = ", ".join(b for b in (row.spec, location_name(row.location)) if b)
+            if row.discontinued:
+                meta += ". Discontinued colour"
+            staff_line = (f'<div class="cp-staff">Cost {money(row.unit_cost)}/sq ft, '
+                          f'margin {price.margin_pct:.1f}%</div>') if staff else ""
+            c_info.markdown(f'<div class="cp-name">{esc(row.name)}</div>'
+                            f'<div class="cp-meta">{esc(meta)}. {esc(stock)}.<br>'
+                            f'{money(price.per_sqft, cents=False)} per sq ft installed, before GST and sinks.</div>'
+                            f'{staff_line}',
+                            unsafe_allow_html=True)
+            c_price.markdown(f'<div class="cp-price"><b>{money(price.total, cents=False)}</b>'
+                             f'<span>with GST</span></div>',
+                             unsafe_allow_html=True)
+            with st.container(horizontal=True, horizontal_alignment="right"):
+                if st.button("Details", key=f"det_{row.variant}"):
+                    show_details(row.variant)
+                st.button("On quote, remove" if in_quote else "Add to quote",
+                          icon=":material/check:" if in_quote else ":material/add:",
+                          key=f"add_{row.variant}", on_click=toggle_quote, args=(row.variant,),
+                          type="secondary" if in_quote else "primary",
+                          disabled=quote_full and not in_quote,
+                          help=(f"A quote holds up to {BRANDING.max_quote_options} options"
+                                if quote_full and not in_quote else None))
+
+    if len(shown) > ss["shown"]:
+        left = len(shown) - ss["shown"]
+        if st.button(f"Show {min(left, config.PAGE_SIZE)} more ({left} not shown)", width="stretch"):
+            ss["shown"] += config.PAGE_SIZE
+            st.rerun()
+
+
+# --- Quote ------------------------------------------------------------------
+with side:
+    with st.container(border=True, key="panel_quote"):
+        st.subheader("Quote", anchor=False)
+        st.caption(f"No. {ss['quote_number']}")
+
+        gone = [v for v in ss["quote"] if v not in by_variant.index]
+        if gone:
+            ss["quote"] = [v for v in ss["quote"] if v in by_variant.index]
+            st.warning(f"{plural(len(gone), 'slab')} on this quote sold or left inventory and was removed.")
+
+        ready, short = [], []
+        for variant in ss["quote"]:
+            (ready if picks[variant] is not None else short).append(variant)
+
+        if not ss["quote"]:
+            st.markdown(f'<div class="cp-empty">Add up to {BRANDING.max_quote_options} slabs from the list '
+                        "to compare them side by side on one quote.</div>", unsafe_allow_html=True)
+        for n, variant in enumerate(ready, 1):
+            opt = option_for(variant)
+            c_text, c_x = st.columns([6, 1], vertical_alignment="center")
+            c_text.markdown(md(f"**{n}. {opt.name}**  \n:gray[{', '.join(b for b in (opt.spec, opt.location) if b)}]  \n"
+                               f"{money(opt.price.total)} with GST"))
+            c_x.button("", icon=":material/close:", key=f"rm_{variant}", on_click=toggle_quote,
+                       args=(variant,), help=f"Remove {opt.name} from the quote", type="tertiary")
+        for variant in short:
+            row = by_variant.loc[variant]
+            c_text, c_x = st.columns([6, 1], vertical_alignment="center")
+            c_text.markdown(f"**{md(row['name'])}**  \n:orange[Only {row['available']:,.1f} sq ft in stock; "
+                            f"this project needs {needed:,.1f}. Left off the quote.]")
+            c_x.button("", icon=":material/close:", key=f"rm_{variant}", on_click=toggle_quote,
+                       args=(variant,), help=f"Remove {row['name']} from the quote", type="tertiary")
+
+        if sink_lines:
+            st.caption("Sinks on every option: " + "; ".join(f"{s.quantity} x {s.label}" for s in sink_lines))
 
         st.divider()
+        st.text_input("Customer name", key="customer_name")
+        st.text_input("Phone or email", key="customer_contact")
+        st.text_input("Project or address", key="project")
+        st.text_input("Prepared by", key="prepared_by")
 
-        # Sink sub-section
-        st.markdown('<span class="card-sub">🚰 Sinks</span>', unsafe_allow_html=True)
-        col_dropdown, col_add = st.columns([4, 1])
-        with col_dropdown:
-            sink_to_add = st.selectbox(
-                "Sink Model",
-                options=list(SINK_OPTIONS.keys()),
-                help="Choose a sink to add to the quote",
-                key="sink_selector",
-                label_visibility="collapsed",
+        if ready:
+            quote = Quote(
+                number=ss["quote_number"], created=datetime.now(), sqft=sqft,
+                options=[option_for(v) for v in ready], sinks=sink_lines,
+                customer_name=ss.get("customer_name", "").strip(),
+                customer_contact=ss.get("customer_contact", "").strip(),
+                project=ss.get("project", "").strip(),
+                prepared_by=ss.get("prepared_by", "").strip(),
             )
-        with col_add:
-            if st.button("➕ Add Sink", use_container_width=True):
-                st.session_state.selected_sinks.append({
-                    'type':     sink_to_add,
-                    'price':    SINK_OPTIONS[sink_to_add],
-                    'quantity': 1,
-                })
-                st.rerun()
-
-        # Display selected sinks with quantity controls
-        if st.session_state.selected_sinks:
-            for idx, sink in enumerate(st.session_state.selected_sinks):
-                col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
-                with col1:
-                    line_total = sink['price'] * sink['quantity']
-                    label = sink['type'].split('-')[0].strip() or sink['type']
-                    st.markdown(
-                        f'<div class="sink-row">{label}<br>'
-                        f'<small style="color:#64748b">${sink["price"]:,.0f} ea · ${line_total:,.2f} total</small></div>',
-                        unsafe_allow_html=True,
-                    )
-                with col2:
-                    if st.button("➖", key=f"minus_sink_{idx}", use_container_width=True):
-                        if sink['quantity'] > 1:
-                            st.session_state.selected_sinks[idx]['quantity'] -= 1
-                        else:
-                            st.session_state.selected_sinks.pop(idx)
-                        st.rerun()
-                with col3:
-                    st.markdown(f"<div style='text-align:center;padding-top:8px;font-weight:700'>{sink['quantity']}</div>", unsafe_allow_html=True)
-                with col4:
-                    if st.button("➕", key=f"plus_sink_{idx}", use_container_width=True):
-                        st.session_state.selected_sinks[idx]['quantity'] += 1
-                        st.rerun()
+            st.download_button("Download quote PDF", data=build_pdf(quote),
+                               file_name=f"{quote.file_stem}.pdf", mime="application/pdf",
+                               type="primary", icon=":material/picture_as_pdf:", width="stretch",
+                               on_click="ignore")
+            st.download_button("Download as spreadsheet (CSV)",
+                               data=pd.DataFrame(to_rows(quote)).to_csv(index=False).encode("utf-8"),
+                               file_name=f"{quote.file_stem}.csv", mime="text/csv", width="stretch",
+                               on_click="ignore")
         else:
-            st.markdown('<div class="empty-state">No sinks added — select a model above and click ➕ Add Sink</div>', unsafe_allow_html=True)
-
-        total_sink_price = sum(
-            s['price'] * s['quantity'] for s in st.session_state.selected_sinks
-        )
-        if total_sink_price > 0:
-            st.markdown(f"**Sink subtotal: ${total_sink_price:,.2f}**")
-
-    # ── Filters ────────────────────────────────────────────────────────────────
-    with st.container(border=True):
-        st.markdown('<span class="card-title"><span class="step-badge">2</span> Browse & Filter</span>', unsafe_allow_html=True)
-
-        # Compute dynamic price range based on slabs that have sufficient stock
-        temp_filtered = grouped_df[
-            grouped_df['On Hand Qty'] >= (sqft * WASTE_FACTOR)
-        ].copy()
-
-        if len(temp_filtered) > 0:
-            temp_filtered['_calc_price'] = temp_filtered['Unit_Cost'].apply(
-                lambda uc: calculate_cost(uc, sqft, total_sink_price)['total_with_tax']
-            )
-            min_price = (int(temp_filtered['_calc_price'].min()) // 100) * 100
-            max_price = ((int(temp_filtered['_calc_price'].max()) // 100) + 1) * 100
-        else:
-            min_price, max_price = 500, 10000
-
-        # ── Dual-ended budget range slider ────────────────────────────────────
-        budget_range = st.slider(
-            "💰 Customer Budget Range (incl. GST)",
-            min_value=min_price,
-            max_value=max_price,
-            value=(min_price, max_price),
-            step=100,
-            help="Filter slabs by minimum and maximum customer total price (incl. tax)",
-        )
-        budget_min, budget_max = budget_range
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            all_brands = sorted(grouped_df['Brand'].unique())
-            selected_brands = st.multiselect(
-                "Brand",
-                options=all_brands,
-                default=[],
-                help="Leave empty to show all brands, or pick specific ones",
-            )
-
-        with col2:
-            all_thickness = sorted(grouped_df['Thickness'].unique(), reverse=True)
-            selected_thickness = st.multiselect(
-                "Thickness",
-                options=all_thickness,
-                default=all_thickness,
-                help="Select one or more thickness options",
-            )
-
-        with col3:
-            search_term = st.text_input(
-                "🔎 Search",
-                placeholder="Brand, color, keyword…",
-                help="Search by brand, color name, or any keyword",
-            )
-
-        with col4:
-            sort_by = st.selectbox(
-                "Sort By",
-                options=[
-                    "Price (Low to High)",
-                    "Price (High to Low)",
-                    "Available Size (Largest First)",
-                ],
-                help="Order the material list",
-            )
-
-    # ── Apply Filters ──────────────────────────────────────────────────────────
-    filtered_df = grouped_df.copy()
-
-    # 1. Sufficient stock
-    filtered_df = filtered_df[filtered_df['On Hand Qty'] >= sqft * WASTE_FACTOR]
-
-    # 2. Brand — empty selection means "show all"
-    if selected_brands:
-        filtered_df = filtered_df[filtered_df['Brand'].isin(selected_brands)]
-
-    # 3. Thickness
-    if selected_thickness:
-        filtered_df = filtered_df[filtered_df['Thickness'].isin(selected_thickness)]
-
-    # 4. Color search — escape user input to prevent regex injection
-    if search_term:
-        safe_term = re.escape(search_term)
-        filtered_df = filtered_df[
-            filtered_df['Color'].str.contains(safe_term, case=False, na=False)
-            | filtered_df['Brand'].str.contains(safe_term, case=False, na=False)
-            | filtered_df['Product Variant'].str.contains(safe_term, case=False, na=False)
-        ]
-
-    # 5. Compute price once — reused for both budget filtering and sorting
-    filtered_df = filtered_df.copy()
-    filtered_df['_price'] = filtered_df['Unit_Cost'].apply(
-        lambda uc: calculate_cost(uc, sqft, total_sink_price)['total_with_tax']
-    )
-    filtered_df = filtered_df[
-        (filtered_df['_price'] >= budget_min)
-        & (filtered_df['_price'] <= budget_max)
-    ]
-
-    if sort_by in ("Price (Low to High)", "Price (High to Low)"):
-        ascending = sort_by == "Price (Low to High)"
-        filtered_df = filtered_df.sort_values('_price', ascending=ascending)
-    elif sort_by == "Available Size (Largest First)":
-        filtered_df = filtered_df.sort_values('On Hand Qty', ascending=False)
-
-    filtered_df = filtered_df.drop(columns=['_price'])
-
-    # ── Slab Selection ─────────────────────────────────────────────────────────
-    mat_count = len(filtered_df)
-    if mat_count > 0:
-        badge = f'<span class="count-badge">{mat_count} available</span>'
-    else:
-        badge = '<span class="count-badge-zero">0 available</span>'
-
-    with st.container(border=True):
-        st.markdown(
-            f'<span class="card-title"><span class="step-badge">3</span> Select Material {badge}</span>',
-            unsafe_allow_html=True,
-        )
-
-        filtered_df['display_name'] = filtered_df.apply(
-            lambda row: f"{row['Brand']} {row['Color']} {row['Thickness']} ({row['On Hand Qty']:.1f} sf)",
-            axis=1,
-        )
-        display_to_variant = dict(zip(filtered_df['display_name'], filtered_df['Product Variant']))
-
-        if mat_count > 0:
-            ordered_display_names = list(filtered_df['display_name'])
-            selected_display = st.selectbox("Select Slab", ordered_display_names, label_visibility="collapsed")
-            selected_variant = display_to_variant[selected_display]
-        else:
-            active_filters = []
-            if selected_brands:
-                active_filters.append(f"brand filter ({', '.join(selected_brands)})")
-            if search_term:
-                active_filters.append(f'search "{search_term}"')
-            hint = f" Try removing the {' or '.join(active_filters)}." if active_filters else " Try widening the budget range or adjusting thickness."
-            st.markdown(
-                f'<div class="no-results">⚠️ No slabs match your current filters.{hint}</div>',
-                unsafe_allow_html=True,
-            )
-            selected_variant = None
-
-    # ── Results ────────────────────────────────────────────────────────────────
-    if selected_variant:
-        slab_data  = grouped_df[grouped_df['Product Variant'] == selected_variant].iloc[0]
-        all_slabs  = df[df['Product Variant'] == selected_variant]
-        pricing    = calculate_cost(slab_data['Unit_Cost'], sqft, total_sink_price)
-        slab_label = f"{slab_data['Brand']} {slab_data['Color']} {slab_data['Thickness']}"
-
-        c1, c2 = st.columns([1, 1])
-
-        with c1:
-            with st.container(border=True):
-                st.markdown('<span class="card-title">Inventory Context</span>', unsafe_allow_html=True)
-
-                # Display all serial numbers for this variant
-                serial_num_cols = [
-                    'Serial Number', 'SKU', 'Item Code', 'Product SKU', 'Serialized Inventory'
-                ]
-                serial_numbers = []
-                for col in serial_num_cols:
-                    if col in all_slabs.columns:
-                        for serial in all_slabs[col]:
-                            if pd.notna(serial) and serial not in serial_numbers:
-                                serial_numbers.append(str(serial))
-                        if serial_numbers:
-                            break
-
-                if serial_numbers:
-                    st.markdown("**Serial Numbers:**")
-                    for serial in serial_numbers:
-                        st.write(f"• {serial}")
-
-                st.metric("Available Qty", f"{slab_data['On Hand Qty']:.1f} sf")
-
-                search_query = (
-                    f"{slab_data['Brand']} {slab_data['Color']} countertop installed"
-                ).replace(" ", "+")
-                st.link_button(
-                    "🖼️ View Installed Photos",
-                    f"https://www.google.com/search?tbm=isch&q={search_query}",
-                    use_container_width=True,
-                )
-
-        with c2:
-            st.markdown(f"""
-            <div class="large-price">
-                <p>CUSTOMER TOTAL</p>
-                <h1>${pricing['total_with_tax']:,.2f}</h1>
-                <p>Incl. 5% GST</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            with st.expander("💰 Cost Breakdown"):
-                margin_pct = pricing['margin_pct']
-                margin_class = "good-margin" if margin_pct >= 18 else "low-margin"
-                margin_label = "✅ Healthy" if margin_pct >= 18 else "⚠️ Low"
-                st.markdown(
-                    f'Margin: <span class="{margin_class}">{margin_pct:.1f}% — {margin_label}</span>',
-                    unsafe_allow_html=True,
-                )
-                st.divider()
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.metric("Internal Cost (IB)", f"${pricing['ib_cost']:,.2f}")
-                with col_b:
-                    st.metric("Mat & Fab (Customer)", f"${pricing['customer_mat_fab']:,.2f}")
-                st.write(f"Installation: **${pricing['customer_ins']:,.2f}**")
-                if pricing['sink_price'] > 0:
-                    st.write("**Sinks:**")
-                    for sink in st.session_state.selected_sinks:
-                        st.write(
-                            f"  • {sink['type']}: ${sink['price']:,.2f}"
-                            f" × {sink['quantity']} = **${sink['price'] * sink['quantity']:,.2f}**"
-                        )
-                    st.write(f"Sink total: **${pricing['sink_price']:,.2f}**")
-                st.write(f"Subtotal (excl. tax): **${pricing['subtotal']:,.2f}**")
-                st.write(f"GST (5%): **${pricing['subtotal'] * TAX_RATE:,.2f}**")
-
-            # ── Download Quote as PDF ──────────────────────────────────────────
-            pdf_bytes = generate_quote_pdf(
-                slab_name=slab_label,
-                sqft=sqft,
-                sinks=st.session_state.selected_sinks,
-                pricing=pricing,
-            )
-            st.download_button(
-                label="📄 Download Quote as PDF",
-                data=pdf_bytes,
-                file_name=f"quote_{slab_label.replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-
-        # ── Add to Comparison ──────────────────────────────────────────────────
-        st.markdown("---")
-        if st.button("➕ Add to Comparison", use_container_width=True, type="primary"):
-            comparison_item = {
-                'variant':   selected_variant,
-                'brand':     slab_data['Brand'],
-                'color':     slab_data['Color'],
-                'thickness': slab_data['Thickness'],
-                'price':     pricing['total_with_tax'],
-                'subtotal':  pricing['subtotal'],
-                'sqft':      sqft,
-                'sinks': [
-                    {'type': s['type'], 'quantity': s['quantity'], 'price': s['price']}
-                    for s in st.session_state.selected_sinks
-                ],
-            }
-            st.session_state.comparison_tray.append(comparison_item)
-            st.success("Added to comparison tray!")
-
-    # ── Comparison Tray ────────────────────────────────────────────────────────
-    if st.session_state.comparison_tray:
-        st.markdown("---")
-        st.markdown("### 🔍 Comparison Tray")
-
-        col_clear, col_spacer = st.columns([1, 5])
-        with col_clear:
-            if st.button("🗑️ Clear All", use_container_width=True):
-                st.session_state.comparison_tray = []
-                st.rerun()
-
-        # Display comparison items in columns (up to MAX_COMPARISON_COLS per row)
-        num_items = len(st.session_state.comparison_tray)
-        cols = st.columns(min(num_items, MAX_COMPARISON_COLS))
-
-        for idx, item in enumerate(st.session_state.comparison_tray):
-            with cols[idx % MAX_COMPARISON_COLS]:
-                with st.container(border=True):
-                    st.markdown(f"**{item['brand']} {item['color']}**")
-                    st.write(f"{item['thickness']} • {item['sqft']:.0f} sf")
-
-                    if item.get('sinks'):
-                        st.write("**Sinks:**")
-                        for sink in item['sinks']:
-                            label = sink['type'].split('-')[0].strip() or sink['type']
-                            st.write(f"• {label}: {sink['quantity']}x")
-
-                    st.markdown(f"### ${item['price']:,.2f}")
-
-                    search_query = (
-                        f"{item['brand']} {item['color']} countertop installed"
-                    ).replace(" ", "+")
-                    st.link_button(
-                        "🖼️ View Photos",
-                        f"https://www.google.com/search?tbm=isch&q={search_query}",
-                        use_container_width=True,
-                    )
-
-                    if st.button("Remove", key=f"remove_{idx}", use_container_width=True):
-                        st.session_state.comparison_tray.pop(idx)
-                        st.rerun()
-
-        # ── Export Comparison Tray as CSV ──────────────────────────────────────
-        tray_rows = []
-        for item in st.session_state.comparison_tray:
-            sink_summary = "; ".join(
-                f"{s['type']} ×{s['quantity']}" for s in item.get('sinks', [])
-            ) or "None"
-            tray_rows.append({
-                "Brand":      item['brand'],
-                "Color":      item['color'],
-                "Thickness":  item['thickness'],
-                "Sq Ft":      item['sqft'],
-                "Sinks":      sink_summary,
-                "Subtotal":   item.get('subtotal', ""),
-                "Total (incl. GST)": item['price'],
-            })
-
-        tray_csv = pd.DataFrame(tray_rows).to_csv(index=False).encode("utf-8")
-        st.download_button(
-            label="📥 Export Comparison as CSV",
-            data=tray_csv,
-            file_name="comparison_tray.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-
-else:
-    st.error("Unable to load inventory data. Check your network connection or data source URLs.")
+            st.button("Download quote PDF", disabled=True, width="stretch",
+                      icon=":material/picture_as_pdf:", help="Add a slab to the quote first")
+        st.button("Start a new quote", on_click=new_quote, width="stretch",
+                  help="Clears the slabs, sinks and customer details")

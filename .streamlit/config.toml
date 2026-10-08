@@ -1,0 +1,45 @@
+[server]
+enableStaticServing = true
+maxUploadSize = 5
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#17494D"
+backgroundColor = "#E7EAE8"
+secondaryBackgroundColor = "#F4F6F5"
+textColor = "#1C2526"
+borderColor = "#CBD2CF"
+baseRadius = "3px"
+font = "Barlow, sans-serif"
+headingFont = "'Barlow Condensed', Barlow, sans-serif"
+baseFontSize = 17
+
+[[theme.fontFaces]]
+family = "Barlow"
+url = "app/static/barlow-latin-400-normal.woff2"
+weight = 400
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Barlow"
+url = "app/static/barlow-latin-600-normal.woff2"
+weight = 600
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Barlow Condensed"
+url = "app/static/barlow-condensed-latin-600-normal.woff2"
+weight = 600
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Barlow Condensed"
+url = "app/static/barlow-condensed-latin-700-normal.woff2"
+weight = 700
+style = "normal"
+
+[client]
+toolbarMode = "minimal"

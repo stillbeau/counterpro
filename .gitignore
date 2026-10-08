@@ -36,5 +36,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Streamlit
-.streamlit/
+# Streamlit (config.toml holds the theme and is committed)
+.streamlit/secrets.toml
+.pytest_cache/
+
+# Uploaded inventory (holds slab costs)
+.counterpro/
