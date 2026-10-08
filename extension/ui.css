@@ -1,0 +1,19 @@
+:root { --ink:#1C2526; --muted:#5E6B6C; --rule:#CBD2CF; --slate:#17494D; --stone:#E7EAE8; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: #fff; }
+body.popup { width: 320px; padding: 14px 16px; }
+body.options { max-width: 640px; padding: 28px 24px; margin: 0 auto; }
+h1 { font-size: 1.15rem; margin: 0 0 8px; }
+p { margin: 0 0 10px; }
+ul { margin: 0 0 12px; padding-left: 18px; color: var(--muted); }
+.small { font-size: 0.85rem; color: var(--muted); margin-top: 12px; }
+.problem { color: #8C1D18; }
+label { display: block; font-weight: 600; margin: 16px 0 4px; }
+input, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; color: inherit; }
+textarea { font-size: 0.8rem; font-family: ui-monospace, Consolas, monospace; white-space: pre; overflow-x: auto; }
+input[type="time"] { width: auto; }
+button { margin-top: 16px; padding: 9px 16px; border: 0; border-radius: 3px; background: var(--slate); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+form button { display: block; }
+button:disabled { opacity: 0.6; cursor: default; }
+:focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
+a { color: var(--slate); }

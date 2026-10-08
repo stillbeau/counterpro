@@ -120,15 +120,21 @@ def test_html_file_works_as_a_feed():
     assert result.errors == [] and len(result.slabs) == 10
 
 
-def test_store_round_trip(tmp_path, monkeypatch, page):
-    monkeypatch.setenv("COUNTERPRO_DATA_DIR", str(tmp_path))
-    assert store.load() is None and store.stamp() == 0.0
+def test_local_store_round_trip(tmp_path, page):
+    local = store.LocalStore(tmp_path)
+    assert local.load() is None and local.stamp() == 0.0
     rows, info = parse_inventory_html(page)
-    store.save(rows, ["inventory.html"], info["filters"], now=datetime(2026, 10, 8, 10, 55))
-    snap = store.load()
-    assert store.stamp() > 0
+    local.save(rows, ["inventory.html"], info["filters"], now=datetime(2026, 10, 8, 10, 55))
+    snap = local.load()
+    assert local.stamp() > 0
     assert snap.saved_at == datetime(2026, 10, 8, 10, 55) and snap.files == ("inventory.html",)
     assert snap.filters["Product"] == "15 - Stone & Quartz (VER)"
     pd.testing.assert_frame_equal(clean_slabs(snap.rows), clean_slabs(rows))
-    store.clear()
-    assert store.load() is None and store.stamp() == 0.0
+    local.clear()
+    assert local.load() is None and local.stamp() == 0.0
+
+
+def test_local_store_reports_damage(tmp_path):
+    (tmp_path / store.FILE_NAME).write_text("{not json", encoding="utf-8")
+    with pytest.raises(store.StoreError, match="damaged"):
+        store.LocalStore(tmp_path).load()

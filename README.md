@@ -20,7 +20,8 @@ streamlit run app.py
 | `counterpro/pricing.py` | The pricing formula. |
 | `counterpro/moraware.py` | Reads a saved Moraware inventory page. |
 | `counterpro/inventory.py` | Tidies product names, works out which slabs a job uses. |
-| `counterpro/store.py` | Keeps the uploaded inventory between visits. |
+| `counterpro/store.py` | Keeps the Moraware inventory (GitHub repository or local folder). |
+| `extension/` | Chrome extension that syncs Moraware inventory to the store each day. |
 | `counterpro/quote.py` | The quote PDF and CSV. |
 | `app.py` | The screen. |
 | `.streamlit/config.toml` | Colours and fonts. |
@@ -37,21 +38,51 @@ Slab cost per sq ft is the total cost of a product's slabs divided by their tota
 
 ## Inventory
 
-Inventory comes from Moraware in one of two ways.
+Inventory comes from Moraware. The app reads it from a small store, and there are two ways to fill it.
 
-**Uploaded Moraware page (preferred).** In Moraware open the inventory view, save the page
-(Ctrl+S, "Webpage, HTML only"), then in the app sidebar unlock with the staff code and drop the file
-under **Update from Moraware**. The app shows how many slabs it found and what changes before you
-confirm. Everyone using the app sees the new inventory straight away. The view needs the
-`Product Variant`, `Serialized On Hand Cost` and `Measurement` columns; `Serial Number` and
-`Location` are used when present. Columns can be in any order.
+**Automatic: the sync extension.** `extension/` is a Chrome extension for a computer that is signed in
+to Moraware. Once a day (and whenever you press **Sync now**) it opens the Moraware inventory views
+with the sign-in already in that browser, keeps only the slab table, and saves it to the store. No
+Moraware password is stored anywhere. If Moraware is signed out, or a view comes back empty, nothing
+is sent and the previous inventory stays in place.
 
-The upload is kept in a `.counterpro/` folder beside the app (set `COUNTERPRO_DATA_DIR` to move it).
-On a host that wipes its disk on restart, the app falls back to the feed below until the next upload.
+**By hand: upload a saved page.** In Moraware open the inventory view, save the page (Ctrl+S,
+"Webpage, HTML only"), then in the app sidebar unlock with the staff code and drop the file under
+**Update from Moraware**. The app shows how many slabs it found and what changes before you confirm.
 
-**Spreadsheet feed (fallback).** The published Google Sheet in `counterpro/config.py`, re-read every
-60 seconds. Used only when there is no uploaded page. To point at a different CSV, or at a saved
-Moraware page on disk:
+Either way the view needs the `Product Variant`, `Serialized On Hand Cost` and `Measurement` columns;
+`Serial Number` and `Location` are used when present. Columns can be in any order.
+
+### The store
+
+On Streamlit Community Cloud the app's disk is wiped on every restart, so the inventory is kept in a
+private GitHub repository instead.
+
+1. Create a **private** repository, for example `counterpro-data`, with a README so it has a first commit.
+2. Create a fine-grained personal access token limited to that one repository, with repository
+   permission **Contents: Read and write**.
+3. In the Streamlit app's settings, under Secrets, add (see `.streamlit/secrets.toml.example`):
+
+   ```toml
+   staff_code = "pick-a-code"
+
+   [inventory_store]
+   repo = "your-name/counterpro-data"
+   token = "github_pat_..."
+   ```
+
+4. On the work computer: open `chrome://extensions`, turn on Developer mode, choose **Load unpacked**
+   and pick the `extension` folder. Open the extension's options, enter the same repository and token,
+   save, then press **Sync now** in its popup.
+
+Without the `[inventory_store]` secrets the app keeps uploads in a `.counterpro/` folder beside it,
+which is fine on a machine you run yourself.
+
+### Fallback feed
+
+Until the store has inventory in it, the app reads the published Google Sheet in
+`counterpro/config.py` (re-read every 60 seconds). Remove that address once the sync is running to
+drop the sheet completely. To point at a different CSV, or a saved Moraware page on disk:
 
 ```
 COUNTERPRO_DATA_SOURCES=/path/to/inventory.csv streamlit run app.py
@@ -75,5 +106,7 @@ Without a staff code, cost and margin are open to anyone who opens the sidebar a
 pip install -r requirements-dev.txt
 pytest
 ```
+
+The extension tests run its sync code with Node (skipped when Node is not installed).
 
 The pricing tests include a copy of the original formula and check that every price still matches it.

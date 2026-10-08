@@ -5,6 +5,16 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+# Hosted servers run on UTC. Quote dates and upload times use the branch's clock.
+TIMEZONE = "America/Vancouver"
+
+
+def now() -> datetime:
+    """Current local time at the branch (no timezone attached)."""
+    return datetime.now(ZoneInfo(TIMEZONE)).replace(tzinfo=None)
 
 
 # --- Pricing rules ----------------------------------------------------------

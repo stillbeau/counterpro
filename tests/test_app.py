@@ -22,6 +22,8 @@ def isolated(monkeypatch, tmp_path):
     """Never read a real uploaded inventory or staff code during tests."""
     monkeypatch.setenv("COUNTERPRO_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.delenv("COUNTERPRO_STAFF_CODE", raising=False)
+    for name in ("COUNTERPRO_STORE_REPO", "COUNTERPRO_STORE_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("COUNTERPRO_LOGO_URL", "")
 
 
@@ -121,14 +123,14 @@ def test_uploaded_moraware_inventory_replaces_the_feed(monkeypatch):
     from counterpro.moraware import parse_inventory_html
     page = (Path(__file__).parent / "fixtures" / "moraware_inventory.html").read_text(encoding="utf-8")
     rows, info = parse_inventory_html(page)
-    store.save(rows, ["inventory.html"], info["filters"])
+    store.LocalStore().save(rows, ["inventory.html"], info["filters"])
     monkeypatch.setenv("COUNTERPRO_DATA_SOURCES", str(FIXTURE))
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
     assert not at.exception
     body = text(at)
     assert "9 slab options for 35.0 sq ft" in body          # 9 products from the page, not 12 from the sheet
     assert "Discontinued colour" in body
-    assert any("Moraware page uploaded" in c.value for c in at.sidebar.caption)
+    assert any("Moraware inventory updated" in c.value for c in at.sidebar.caption)
 
 
 def test_staff_code_locks_cost_and_uploads(monkeypatch):
@@ -149,3 +151,43 @@ def test_staff_code_locks_cost_and_uploads(monkeypatch):
 
 def test_uploads_off_without_a_staff_code(app):
     assert any("Uploads are off" in c.value for c in app.sidebar.caption)
+
+
+from tests.test_github_store import REPO, TOKEN, FakeGitHub, github  # noqa: E402,F401  (fixture)
+
+
+def _github_env(monkeypatch, api):
+    monkeypatch.setenv("COUNTERPRO_DATA_SOURCES", str(FIXTURE))
+    monkeypatch.setenv("COUNTERPRO_STORE_REPO", REPO)
+    monkeypatch.setenv("COUNTERPRO_STORE_TOKEN", TOKEN)
+    monkeypatch.setenv("COUNTERPRO_STORE_API", api)
+
+
+def test_app_reads_inventory_the_extension_sent_to_github(monkeypatch, github):
+    import base64
+    import json
+    page = (Path(__file__).parent / "fixtures" / "moraware_inventory.html").read_text(encoding="utf-8")
+    doc = json.dumps({"saved_at": "2026-10-08T08:30:00", "source": "extension",
+                      "files": ["15 - Stone & Quartz (VER)"], "pages": [{"name": "VER", "url": "u", "html": page}]})
+    FakeGitHub.files["moraware_inventory.json"] = (base64.b64encode(doc.encode()).decode(), "sha1")
+    _github_env(monkeypatch, github)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    assert not at.exception
+    assert "9 slab options for 35.0 sq ft" in text(at)
+    captions = [c.value for c in at.sidebar.caption]
+    assert any("Moraware inventory updated Oct 8 at 08:30" in c for c in captions)
+    assert any(f"kept in the GitHub repository {REPO}" in c for c in captions)
+
+
+def test_app_uses_the_feed_until_the_store_has_inventory(monkeypatch, github):
+    _github_env(monkeypatch, github)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    assert not at.exception and "12 slab options for 35.0 sq ft" in text(at)
+
+
+def test_app_survives_the_store_being_unreachable(monkeypatch):
+    _github_env(monkeypatch, "http://127.0.0.1:9")
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    assert not at.exception
+    assert "12 slab options for 35.0 sq ft" in text(at)          # falls back to the feed
+    assert any("could not be reached" in w.value for w in at.sidebar.warning)

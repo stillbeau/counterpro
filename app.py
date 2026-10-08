@@ -76,20 +76,49 @@ st.html("""
 
 
 # --- Data -------------------------------------------------------------------
+def store_settings() -> tuple:
+    """The [inventory_store] secrets plus the matching environment variables,
+    as a tuple so a change in either gives a fresh store."""
+    try:
+        settings = dict(st.secrets.get("inventory_store", {}))
+    except Exception:                  # no secrets file
+        settings = {}
+    env = {k: os.environ.get(k, "") for k in ("COUNTERPRO_STORE_REPO", "COUNTERPRO_STORE_TOKEN",
+                                              "COUNTERPRO_STORE_PATH", "COUNTERPRO_STORE_BRANCH",
+                                              "COUNTERPRO_STORE_API", "COUNTERPRO_DATA_DIR")}
+    return tuple(sorted({**{k: str(v) for k, v in settings.items()}, **env}.items()))
+
+
+@st.cache_resource(show_spinner=False)
+def inventory_store(settings: tuple):
+    """Where Moraware inventory is kept: a GitHub repository when the
+    [inventory_store] secrets are set, otherwise a folder on this server."""
+    return store.from_settings({k: v for k, v in settings if not k.startswith("COUNTERPRO_")})
+
+
 @st.cache_data(ttl=config.CACHE_SECONDS, show_spinner="Loading slab inventory")
-def fetch(sources: tuple[str, ...], upload_stamp: float):
-    """Inventory for everyone using the app. An uploaded Moraware page wins over
+def fetch(sources: tuple[str, ...], settings: tuple, upload_stamp: float):
+    """Inventory for everyone using the app. Inventory from Moraware wins over
     the feed; `upload_stamp` changes when a new one is saved, which refreshes this."""
-    snapshot = store.load() if upload_stamp else None
+    kept, errors, snapshot = inventory_store(settings), [], None
+    if upload_stamp:
+        try:
+            snapshot = kept.load()
+            kept.last_good = snapshot
+        except store.StoreError as exc:
+            # A brief outage must not swap the list for the spreadsheet feed.
+            snapshot = kept.last_good
+            errors.append(f"Saved inventory: {exc}" + (" Showing the last copy that loaded." if snapshot else ""))
+    else:
+        kept.last_good = None
     if snapshot is not None:
         try:
             slabs = drop_duplicate_serials(clean_slabs(snapshot.rows))
-            return slabs, [], datetime.now(), snapshot
-        except Exception as exc:       # a damaged upload must not take the app down
-            result = load_slabs(sources)
-            return result.slabs, [f"Uploaded inventory could not be read: {exc}", *result.errors], datetime.now(), None
+            return slabs, errors, config.now(), snapshot
+        except Exception as exc:       # damaged inventory must not take the app down
+            errors.append(f"Saved inventory could not be read: {exc}")
     result = load_slabs(sources)
-    return result.slabs, result.errors, datetime.now(), None
+    return result.slabs, [*errors, *result.errors], config.now(), None
 
 
 def staff_code() -> str:
@@ -119,7 +148,7 @@ def plural(n: int, word: str) -> str:
 ss = st.session_state
 ss.setdefault("sinks", {})            # sku -> quantity
 ss.setdefault("quote", [])            # product variants on the quote, in order
-ss.setdefault("quote_number", new_quote_number())
+ss.setdefault("quote_number", new_quote_number(config.now()))
 ss.setdefault("shown", config.PAGE_SIZE)
 
 
@@ -146,7 +175,7 @@ def toggle_quote(variant: str):
 def new_quote():
     ss["quote"] = []
     ss["sinks"] = {}
-    ss["quote_number"] = new_quote_number()
+    ss["quote_number"] = new_quote_number(config.now())
     for key in ("customer_name", "customer_contact", "project"):
         ss[key] = ""
 
@@ -178,7 +207,9 @@ with st.sidebar:
         fetch.clear()
         st.rerun()
 
-slabs, load_errors, loaded_at, snapshot = fetch(config.data_sources(), store.stamp())
+SETTINGS = store_settings()
+STORE = inventory_store(SETTINGS)
+slabs, load_errors, loaded_at, snapshot = fetch(config.data_sources(), SETTINGS, STORE.stamp())
 
 if slabs is None or slabs.empty:
     st.title(BRANDING.app_name)
@@ -198,14 +229,19 @@ def upload_panel():
     st.divider()
     st.subheader("Inventory source")
     if snapshot is not None:
-        age = datetime.now() - snapshot.saved_at
-        st.caption(f"Moraware page uploaded {snapshot.saved_at:%b} {snapshot.saved_at.day} at "
+        age = config.now() - snapshot.saved_at
+        st.caption(f"Moraware inventory updated {snapshot.saved_at:%b} {snapshot.saved_at.day} at "
                    f"{snapshot.saved_at:%H:%M}" + "".join(f". {k}: {v}" for k, v in snapshot.filters.items()
                                                           if k in ("Product",) and v) + ".")
         if age > timedelta(days=config.UPLOAD_STALE_DAYS):
             st.warning(f"This inventory is {age.days} days old. Slabs may have sold since.")
     else:
         st.caption("Reading the spreadsheet feed.")
+    if STORE.durable:
+        st.caption(f"Inventory is kept {STORE.where}.")
+    else:
+        st.caption("Uploads are kept on this server only and are lost when it restarts. "
+                   "Add an [inventory_store] block to the app's secrets to keep them.")
 
     if not CODE:
         st.caption("Uploads are off until a staff code is set (COUNTERPRO_STAFF_CODE).")
@@ -252,14 +288,22 @@ def upload_panel():
                 st.warning("The upload has no slabs for " + ", ".join(location_name(c) for c in lost_sites)
                            + ". They will disappear from the list.")
             if st.button("Use this inventory", type="primary", width="stretch"):
-                store.save(raw, names, filters)
-                ss["upload_round"] += 1
-                fetch.clear()
-                st.rerun()
+                try:
+                    STORE.save(raw, names, filters, now=config.now())
+                except store.StoreError as exc:
+                    st.error(f"Not saved. {exc}")
+                else:
+                    ss["upload_round"] += 1
+                    fetch.clear()
+                    st.rerun()
     if snapshot is not None and st.button("Go back to the spreadsheet feed", width="stretch"):
-        store.clear()
-        fetch.clear()
-        st.rerun()
+        try:
+            STORE.clear()
+        except store.StoreError as exc:
+            st.error(f"Not removed. {exc}")
+        else:
+            fetch.clear()
+            st.rerun()
 
 
 with st.sidebar:
@@ -274,7 +318,7 @@ with st.sidebar:
     if report["allocated_slabs"]:
         st.caption(f"{plural(report['allocated_slabs'], 'slab')} allocated to other jobs and not offered.")
     for err in load_errors:
-        st.warning(f"A feed did not load: {err}")
+        st.warning(err if err.startswith("Saved inventory") else f"A feed did not load: {err}")
     if report["unparsed"]:
         with st.expander(f"{plural(len(report['unparsed']), 'name')} not fully recognised"):
             for name in report["unparsed"]:
@@ -559,7 +603,7 @@ with side:
 
         if ready:
             quote = Quote(
-                number=ss["quote_number"], created=datetime.now(), sqft=sqft,
+                number=ss["quote_number"], created=config.now(), sqft=sqft,
                 options=[option_for(v) for v in ready], sinks=sink_lines,
                 customer_name=ss.get("customer_name", "").strip(),
                 customer_contact=ss.get("customer_contact", "").strip(),
