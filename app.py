@@ -114,11 +114,11 @@ def fetch(sources: tuple[str, ...], settings: tuple, upload_stamp: float):
     if snapshot is not None:
         try:
             slabs = drop_duplicate_serials(clean_slabs(snapshot.rows))
-            return slabs, errors, config.now(), snapshot
+            return slabs, errors, config.now(), snapshot, len(snapshot.rows) - len(slabs)
         except Exception as exc:       # damaged inventory must not take the app down
             errors.append(f"Saved inventory could not be read: {exc}")
     result = load_slabs(sources)
-    return result.slabs, [*errors, *result.errors], config.now(), None
+    return result.slabs, [*errors, *result.errors], config.now(), None, 0
 
 
 def staff_code() -> str:
@@ -209,7 +209,7 @@ with st.sidebar:
 
 SETTINGS = store_settings()
 STORE = inventory_store(SETTINGS)
-slabs, load_errors, loaded_at, snapshot = fetch(config.data_sources(), SETTINGS, STORE.stamp())
+slabs, load_errors, loaded_at, snapshot, left_out = fetch(config.data_sources(), SETTINGS, STORE.stamp())
 
 if slabs is None or slabs.empty:
     st.title(BRANDING.app_name)
@@ -252,7 +252,7 @@ def upload_panel():
                    "Add an [inventory_store] block to the app's secrets to keep them.")
 
     if not CODE:
-        st.caption("Uploads are off until a staff code is set (COUNTERPRO_STAFF_CODE).")
+        st.caption("Uploads are off until a staff code is set (staff_code in the app's secrets).")
         return
     if not ss["unlocked"]:
         st.caption("Unlock with the staff code to upload inventory.")
@@ -325,6 +325,9 @@ with st.sidebar:
         st.caption(f"{location_name(code)}: {plural(count, 'slab')}")
     if report["allocated_slabs"]:
         st.caption(f"{plural(report['allocated_slabs'], 'slab')} allocated to other jobs and not offered.")
+    if left_out:
+        st.caption(f"{plural(left_out, 'Moraware row')} left out: no real size or no cost "
+                   "(placeholder serial numbers, or the same slab listed twice).")
     for err in load_errors:
         st.warning(err if err.startswith("Saved inventory") else f"A feed did not load: {err}")
     if report["unparsed"]:
@@ -518,7 +521,7 @@ with main:
     too_small = len(products) - len(fitting)
     summary = f"{plural(len(shown), 'slab option')} for {sqft:,.1f} sq ft"
     if too_small:
-        summary += f". {too_small} more in stock are too small for this project."
+        summary += f". {too_small} more in stock {'is' if too_small == 1 else 'are'} too small for this project."
     st.markdown(f"**{summary}**")
 
     if shown.empty:

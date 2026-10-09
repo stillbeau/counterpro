@@ -9,7 +9,7 @@ from typing import Iterable, Sequence
 import pandas as pd
 
 from .config import (BRANCH_LOCATIONS, BRAND_ALIASES, FINISHES, KNOWN_BRANDS,
-                     LOCATION_NAMES)
+                     LOCATION_NAMES, MIN_SLAB_SQFT)
 
 REQUIRED_COLUMNS = ("Product Variant", "On Hand Qty", "Serialized On Hand Cost")
 SERIAL_COLUMNS = ("Serial Number", "SKU", "Item Code", "Product SKU", "Serialized Inventory")
@@ -154,7 +154,7 @@ def clean_slabs(raw: pd.DataFrame) -> pd.DataFrame:
         out["received"] = pd.NaT
     out["received"] = pd.to_datetime(out["received"])
 
-    out = out[(out["on_hand"] > 0) & out["cost"].notna()].reset_index(drop=True)
+    out = out[(out["on_hand"] >= MIN_SLAB_SQFT) & (out["cost"] > 0)].reset_index(drop=True)
     parsed = out["variant"].map(parse_variant)
     for attr in ("brand", "color", "thickness", "finish", "location", "color_code"):
         out[attr] = parsed.map(lambda v, a=attr: getattr(v, a))

@@ -193,3 +193,28 @@ def test_from_settings_picks_the_store(monkeypatch, tmp_path):
     monkeypatch.setenv("COUNTERPRO_STORE_REPO", REPO)
     monkeypatch.setenv("COUNTERPRO_STORE_TOKEN", TOKEN)
     assert isinstance(store.from_settings(None), store.GitHubStore)
+
+
+def test_reads_a_file_too_big_for_the_usual_answer(github, rows, monkeypatch):
+    """Over 1 MB, GitHub leaves the content out and it has to be asked for raw."""
+    raw, _ = rows
+    make(github).save(raw, ["a.html"], {})
+    content, sha = FakeGitHub.files[store.FILE_NAME]
+    original = FakeGitHub._send
+
+    def send(self, status, body=None, headers=None):
+        if self.command == "GET" and status == 200 and isinstance(body, dict) and "content" in body:
+            if "raw" in (self.headers.get("Accept") or ""):
+                import base64 as b64
+                data = b64.b64decode(content)
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
+            body = {"content": "", "encoding": "none", "sha": sha}
+        return original(self, status, body, headers)
+
+    monkeypatch.setattr(FakeGitHub, "_send", send)
+    snap = make(github).load()
+    assert len(snap.rows) == 10 and snap.files == ("a.html",)

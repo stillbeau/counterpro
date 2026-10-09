@@ -95,6 +95,11 @@ def data_sources() -> tuple[str, ...]:
 
 CACHE_SECONDS = 60
 
+# Moraware keeps some serial numbers as 1" x 1" placeholders with no cost
+# (seen on remnant racks). A row smaller than this, or with no cost, cannot be
+# priced, so it is left out and counted in the staff sidebar.
+MIN_SLAB_SQFT = 1.0
+
 # An inventory uploaded from Moraware replaces the feed above until it is removed.
 # Staff are warned in the sidebar once it is older than this many days.
 UPLOAD_STALE_DAYS = 3

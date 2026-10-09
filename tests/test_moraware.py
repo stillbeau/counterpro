@@ -179,3 +179,23 @@ def test_no_date_column_means_no_age(page):
     slabs = clean_slabs(parse_inventory_html(page)[0])
     assert slabs["received"].isna().all()
     assert summarize(slabs)["received"].isna().all()
+
+
+def test_placeholder_rows_are_left_out():
+    """Moraware lists some serials as 1" x 1" with no cost. They cannot be priced."""
+    html = pd.DataFrame({
+        "Product Variant": ["17 - Caesarstone (ABB) Alpine Mist #5110 3cm"] * 3 + ["17 - Hanstone (ABB) Tofino 2cm"],
+        "Serial Number": ["A1", "A2", "A3", "B1"],
+        "Measurement": ['120" × 56"', '1" × 1"', '1" × 1"', '1" × 1"'],
+        "Serialized On Hand Cost": ["$900.00", "$0.00", "$0.00", "$0.00"],
+    }).to_html(index=False)
+    slabs = clean_slabs(parse_inventory_html(html)[0])
+    assert list(slabs["serial"]) == ["A1"]
+    product = summarize(slabs).iloc[0]
+    assert product["slab_count"] == 1 and product["unit_cost"] == pytest.approx(900 / (120 * 56 / 144))
+
+
+def test_real_slab_with_no_cost_is_left_out_too():
+    html = pd.DataFrame({"Product Variant": ["15 - Viatera (VER) Aura 3cm"], "Measurement": ['126" x 65"'],
+                         "Serialized On Hand Cost": ["$0.00"]}).to_html(index=False)
+    assert clean_slabs(parse_inventory_html(html)[0]).empty
