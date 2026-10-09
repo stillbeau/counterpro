@@ -46,6 +46,10 @@ with the sign-in already in that browser, keeps only the slab table, and saves i
 Moraware password is stored anywhere. If Moraware is signed out, or a view comes back empty, nothing
 is sent and the previous inventory stays in place.
 
+It first asks Moraware for the page directly. If the slab table is not in what comes back (Moraware
+draws it in the browser), the extension opens the view in a background tab for a few seconds, reads
+the finished page, and closes the tab. A failed sync says which view failed and what came back.
+
 **By hand: upload a saved page.** In Moraware open the inventory view, save the page (Ctrl+S,
 "Webpage, HTML only"), then in the app sidebar unlock with the staff code and drop the file under
 **Update from Moraware**. The app shows how many slabs it found and what changes before you confirm.

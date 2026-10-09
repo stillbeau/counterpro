@@ -17,3 +17,18 @@ CounterPro Inventory Sync - how to install
 
 After that it syncs by itself once a day while Chrome is open.
 If a sync fails, the icon shows a red "!" and the popup says why.
+
+Updating to a newer version
+---------------------------
+1. Copy the new files over the old ones in the SAME folder you loaded
+   before (the one that contains manifest.json). Keeping the same folder
+   keeps your saved token.
+2. In chrome://extensions click the round reload arrow on the
+   "CounterPro Inventory Sync" card. The version number should change.
+3. Press "Sync now" again.
+
+What to expect during a sync
+----------------------------
+If Moraware's page needs the browser to finish drawing the slab table,
+the extension opens the view in a background tab for a few seconds and
+closes it again. That is normal.

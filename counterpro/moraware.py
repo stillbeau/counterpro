@@ -39,7 +39,10 @@ def _map_headers(row: list[str]) -> list[str]:
             name, dated = "Received Date", True
         headers.append(name or cell)
     return headers
-_DIMENSIONS = re.compile(r"(\d+(?:\.\d+)?)\s*(?:\"|in\b|″)?\s*[x×]\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
+
+# Length x width in inches. The separator is normally "×"; the replacement character
+# covers a page that arrived in the wrong character set, so the size is still read.
+_DIMENSIONS = re.compile(r"(\d+(?:\.\d+)?)\s*(?:\"|in\b|″)?\s*[x×\ufffd*]\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 
 
 class NotAnInventoryPage(ValueError):

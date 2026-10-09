@@ -16,65 +16,132 @@ export const DEFAULTS = {
 
 export class SyncError extends Error {}
 
-const SIGNED_OUT = "Moraware did not return the inventory page. Sign in to Moraware in this browser, then sync again.";
+const SIGNED_OUT = "Moraware asked for a sign-in. Sign in to Moraware in this Chrome profile, then sync again.";
+const COST_HEADING = /serialized on hand cost/gi;
 
 // Moraware pages a long list unless asked for everything.
 export function withFullPage(url) {
   return /[?&]pagesize=/i.test(url) ? url : url + (url.includes("?") ? "&" : "?") + "pagesize=9999";
 }
 
-export function looksLikeInventory(html) {
-  return html.includes('id="ProductsBody"') && html.includes("Product Variant") && html.includes("Serialized On Hand Cost");
+// The slab table is whichever table carries the inventory headings. It is found
+// by its headings rather than by an id, because the page Moraware sends and the
+// page the browser ends up showing do not name it the same way.
+export function findInventoryTable(html) {
+  if (!html) return "";
+  const lower = html.toLowerCase();
+  let best = "";
+  let bestRows = -1;
+  for (const m of html.matchAll(COST_HEADING)) {
+    const start = lower.lastIndexOf("<table", m.index);
+    const end = lower.indexOf("</table>", m.index);
+    if (start < 0 || end < 0) continue;
+    const table = html.slice(start, end + "</table>".length);
+    if (!/product variant/i.test(table)) continue;
+    const rows = (table.match(/<tr\b/gi) || []).length;
+    if (rows > bestRows) { best = table; bestRows = rows; }
+  }
+  return best;
 }
 
-function bodyTable(html) {
-  const marker = html.indexOf('id="ProductsBody"');
-  if (marker < 0) return "";
-  const start = html.lastIndexOf("<table", marker);
-  const end = html.indexOf("</table>", marker);
-  return start < 0 || end < 0 ? "" : html.slice(start, end + "</table>".length);
+export function looksLikeInventory(html) {
+  return findInventoryTable(html) !== "";
+}
+
+export function looksLikeSignIn(html) {
+  return /type\s*=\s*["']?password/i.test(html || "");
 }
 
 export function countSlabs(html) {
-  return (bodyTable(html).match(/<tr[^>]*class="(?:oddRow|evenRow)"/g) || []).length;
+  const table = findInventoryTable(html);
+  const rows = (table.match(/<tr\b/gi) || []).length;
+  const headingRows = (table.match(COST_HEADING) || []).length;
+  return Math.max(rows - headingRows, 0);
+}
+
+function infoTables(html) {
+  return html.match(/<table[^>]*pageInfoCenteredJustifiedTable[\s\S]*?<\/table>/gi) || [];
 }
 
 // Keep only what CounterPro reads: the filter description and the slab table,
 // with links, styles and scripts removed. Nothing else on the page is sent.
 export function trimPage(html) {
-  const info = html.match(/<table[^>]*pageInfoCenteredJustifiedTable[\s\S]*?<\/table>/g) || [];
   const strip = (part, keepClass) => part
-    .replace(/<colgroup[\s\S]*?<\/colgroup>/g, "")
-    .replace(/<\/?(?:a|span|div|i|b|font)\b[^>]*>/g, "")
-    .replace(/<(table|thead|tbody|tr|td|th)\b[^>]*>/g, (tag, name) =>
-      keepClass && name === "table" ? '<table class="pageInfoCenteredJustifiedTable">' : `<${name}>`)
+    .replace(/<colgroup[\s\S]*?<\/colgroup>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<\/?(?:a|span|div|i|b|font|nobr|img|input)\b[^>]*>/gi, "")
+    .replace(/<(table|thead|tbody|tr|td|th)\b[^>]*>/gi, (tag, name) =>
+      keepClass && name.toLowerCase() === "table" ? '<table class="pageInfoCenteredJustifiedTable">' : `<${name.toLowerCase()}>`)
+    .replace(/<\/(table|thead|tbody|tr|td|th)\s*>/gi, (tag, name) => `</${name.toLowerCase()}>`)
     .replace(/[-]/g, "")
     .replace(/\s+/g, " ");
   return "<title>Inventory - Moraware Systemize</title>\n"
-    + info.map((part) => strip(part, true)).join("\n") + "\n"
-    + strip(bodyTable(html), false);
+    + infoTables(html).map((part) => strip(part, true)).join("\n") + "\n"
+    + strip(findInventoryTable(html), false);
 }
 
 // "15 - Stone & Quartz (VER)" from the page's own filter description.
 export function pageName(html, url) {
-  const info = (html.match(/<table[^>]*pageInfoCenteredJustifiedTable[\s\S]*?<\/table>/g) || []).join(" ");
-  const m = info.match(/Product:\s*<\/td>\s*<td[^>]*>([^<]+)<\/td>/);
+  const m = infoTables(html).join(" ").match(/Product:\s*<\/td>\s*<td[^>]*>([^<]+)<\/td>/i);
   return m ? m[1].replace(/&amp;/g, "&").trim() : url;
 }
 
-export async function fetchView(url, fetchImpl = fetch) {
+// A short, cost-free description of a page, so a failed sync can say what came back.
+export function describePage(html, address) {
+  const text = html || "";
+  const title = (text.match(/<title[^>]*>([^<]*)<\/title>/i) || [, ""])[1].trim().slice(0, 60);
+  const ids = [...text.matchAll(/<table\b[^>]*\bid\s*=\s*["']?([\w-]+)/gi)].map((m) => m[1]).slice(0, 8);
+  let path = address || "";
+  try { path = new URL(address).pathname; } catch { /* keep as given */ }
+  return `page "${title || "untitled"}" at ${path || "unknown address"}, ${Math.round(text.length / 1024)} KB, `
+    + `${(text.match(/<table\b/gi) || []).length} tables`
+    + (ids.length ? ` (${ids.join(", ")})` : "")
+    + `, headings ${/product variant/i.test(text) ? "found" : "missing"}`;
+}
+
+// Read the page with the character set Moraware declares, so the "×" in slab
+// sizes survives even when the page is not UTF-8.
+async function readText(resp) {
+  const bytes = await resp.arrayBuffer();
+  const declared = (/charset=["']?([\w-]+)/i.exec(resp.headers.get("content-type") || "") || [])[1];
+  const decode = (label) => { try { return new TextDecoder(label).decode(bytes); } catch { return null; } };
+  let text = (declared && decode(declared)) || decode("utf-8");
+  if (!declared) {
+    const meta = (/<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(text.slice(0, 4000)) || [])[1];
+    if (meta && meta.toLowerCase() !== "utf-8") text = decode(meta) || text;
+  }
+  return text;
+}
+
+async function fetchPage(url, fetchImpl) {
   let resp;
   try {
-    resp = await fetchImpl(withFullPage(url), { credentials: "include", cache: "no-store", redirect: "follow" });
+    resp = await fetchImpl(url, { credentials: "include", cache: "no-store", redirect: "follow" });
   } catch (err) {
     throw new SyncError(`Moraware could not be reached (${err.message}).`);
   }
   if (!resp.ok) throw new SyncError(`Moraware answered ${resp.status} for ${url}.`);
-  const html = await resp.text();
-  if (!looksLikeInventory(html)) throw new SyncError(SIGNED_OUT);
-  const slabs = countSlabs(html);
+  return { html: await readText(resp), address: resp.url || url };
+}
+
+// `render`, when given, opens the address in a real tab and returns the page as
+// the browser shows it. It is the fallback for when the page Moraware sends does
+// not contain the table yet (it is put together by the page's own script).
+export async function fetchView(url, fetchImpl = fetch, render = null) {
+  const full = withFullPage(url);
+  let page = await fetchPage(full, fetchImpl);
+  let how = "direct";
+  if (!looksLikeInventory(page.html) && render) {
+    const rendered = await render(full);
+    if (rendered && rendered.html) { page = { html: rendered.html, address: rendered.address || full }; how = "tab"; }
+  }
+  if (!looksLikeInventory(page.html)) {
+    if (looksLikeSignIn(page.html)) throw new SyncError(SIGNED_OUT);
+    throw new SyncError("Moraware returned a page with no inventory table. Got " + describePage(page.html, page.address) + ".");
+  }
+  const slabs = countSlabs(page.html);
   if (!slabs) throw new SyncError(`A view came back with no slabs, so nothing was sent: ${url}`);
-  return { url, name: pageName(html, url), slabs, html: trimPage(html) };
+  return { url, name: pageName(page.html, url), slabs, how, html: trimPage(page.html) };
 }
 
 export function localIso(d) {
@@ -135,14 +202,20 @@ export async function pushToGitHub(settings, text, slabs, fetchImpl = fetch) {
 
 // All or nothing: if any view fails, the stored inventory is left as it was,
 // so one bad page can never wipe a location's slabs from CounterPro.
-export async function runSync(settings, fetchImpl = fetch, now = new Date()) {
+export async function runSync(settings, fetchImpl = fetch, now = new Date(), render = null) {
   const views = (settings.views || []).map((v) => v.trim()).filter(Boolean);
   if (!views.length) throw new SyncError("No Moraware views are set. Add at least one in the options.");
   if (!settings.repo) throw new SyncError("The GitHub repository is not set. Add it in the options.");
   if (!settings.token) throw new SyncError("The GitHub token is not set. Paste it in the options.");
   const pages = [];
-  for (const url of views) pages.push(await fetchView(url, fetchImpl));
+  for (const [i, url] of views.entries()) {
+    try {
+      pages.push(await fetchView(url, fetchImpl, render));
+    } catch (err) {
+      throw new SyncError(`View ${i + 1} of ${views.length}: ${err.message}`);
+    }
+  }
   const slabs = pages.reduce((n, p) => n + p.slabs, 0);
   await pushToGitHub(settings, buildDocument(pages, now), slabs, fetchImpl);
-  return { slabs, savedAt: localIso(now), pages: pages.map(({ name, slabs }) => ({ name, slabs })) };
+  return { slabs, savedAt: localIso(now), pages: pages.map(({ name, slabs, how }) => ({ name, slabs, how })) };
 }

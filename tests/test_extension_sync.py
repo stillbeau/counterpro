@@ -20,6 +20,28 @@ ROOT = Path(__file__).parent.parent
 PAGE = (Path(__file__).parent / "fixtures" / "moraware_inventory.html").read_text(encoding="utf-8")
 SECOND = PAGE.replace("(VER)", "(ABB)").replace("15 - ", "17 - ").replace("VER - ", "ABB - ")
 
+
+def as_the_server_might_send_it(page: str) -> bytes:
+    """The same inventory the way an older server writes it: one table with a
+    different id, upper-case tags, unquoted attributes, and Windows-1252 text.
+    The saved page used elsewhere is the browser's tidied-up version."""
+    import re
+    start = page.index('<div id="ProductsHeadDiv">')
+    end = page.index('<div id="ProductsBodyDiv">')
+    raw = page[:start] + page[end:]                                  # no separate heading table
+    raw = raw.replace('id="ProductsBody"', "id=Products").replace("ProductsBodyDiv", "ProductsDiv")
+    raw = raw.replace('<meta charset="utf-8">', "")
+    raw = re.sub(r'class="(\w+)"', r"class=\1", raw)
+    raw = re.sub(r"<(/?)(table|thead|tbody|tr|td)\b", lambda m: f"<{m.group(1)}{m.group(2).upper()}", raw)
+    assert "ProductsBody" not in raw and "<TR class=oddRow>" in raw
+    raw = raw.replace("\uf0d8", "")                                  # the icon-font glyph has no Windows-1252 form
+    return raw.encode("cp1252")
+
+
+RAW = as_the_server_might_send_it(PAGE)
+SIGN_IN = '<html><head><title>Sign In - Moraware</title></head><body><form><input name="user"><input type="password" name="pwd"></form></body></html>'
+SHELL = "<html><head><title>Inventory - Moraware Systemize</title></head><body><div id=app></div><script>/* draws the table later */</script></body></html>"
+
 pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")
 
 
@@ -31,19 +53,30 @@ class FakeMoraware(BaseHTTPRequestHandler):
 
     def do_GET(self):
         type(self).seen.append(self.path)
+        content_type = "text/html; charset=utf-8"
         if "view=1" in self.path:
             body, status = PAGE, 200
         elif "view=2" in self.path:
             body, status = SECOND, 200
+        elif "raw" in self.path:
+            body, status, content_type = RAW, 200, "text/html; charset=windows-1252"
+        elif "rawmeta" in self.path:
+            body, status, content_type = RAW, 200, "text/html"
         elif "signedout" in self.path:
-            body, status = "<html><body><form>Please sign in</form></body></html>", 200
+            body, status = SIGN_IN, 200
+        elif "builtlater" in self.path:
+            body, status = (PAGE if "rendered=1" in self.path else SHELL), 200
+        elif "tabsignin" in self.path:
+            body, status = (SIGN_IN if "rendered=1" in self.path else SHELL), 200
+        elif "other" in self.path:
+            body, status = '<html><head><title>Jobs - Moraware Systemize</title></head><body><table id="Jobs"><tr><td>Job</td></tr></table></body></html>', 200
         elif "empty" in self.path:
             body, status = PAGE.split("<tbody>\n<tr class")[0] + "</tbody></table></div></body></html>", 200
         else:
             body, status = "missing", 404
-        data = body.encode("utf-8")
+        data = body if isinstance(body, bytes) else body.encode("utf-8")
         self.send_response(status)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -58,8 +91,10 @@ def moraware():
     server.shutdown()
 
 
-def run_sync(github, views, token=TOKEN, repo=REPO):
+def run_sync(github, views, token=TOKEN, repo=REPO, render=False):
     settings = {"views": views, "repo": repo, "token": token, "apiUrl": github, "path": store.FILE_NAME}
+    if render:
+        settings["renderSuffix"] = "&rendered=1"
     out = subprocess.run(["node", str(ROOT / "tests" / "ext_sync_runner.mjs"), json.dumps(settings)],
                          capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
@@ -102,6 +137,7 @@ def test_signed_out_sends_nothing_and_keeps_the_old_inventory(github, moraware):
     before = dict(FakeGitHub.files)
     result = run_sync(github, [f"{moraware}/sys/inventory?&view=1", f"{moraware}/signedout"])
     assert not result["ok"] and "Sign in to Moraware" in result["message"]
+    assert result["message"].startswith("View 2 of 2:")        # says which view failed
     assert FakeGitHub.files == before
 
 
@@ -123,14 +159,53 @@ def test_bad_token_is_reported(github, moraware):
 
 
 def test_missing_settings_are_reported(github, moraware):
-    assert "not set" in run_sync(github, [f"{moraware}/sys/inventory?&view=1"], token="")["message"]
+    assert "token is not set" in run_sync(github, [f"{moraware}/sys/inventory?&view=1"], token="")["message"]
     assert "No Moraware views" in run_sync(github, [])["message"]
 
 
 def test_manifest_is_valid_and_narrow():
     manifest = json.loads((ROOT / "extension" / "manifest.json").read_text())
     assert manifest["manifest_version"] == 3
-    assert set(manifest["permissions"]) == {"storage", "alarms"}
+    assert set(manifest["permissions"]) == {"storage", "alarms", "scripting"}
     assert set(manifest["host_permissions"]) == {"https://*.moraware.net/*", "https://api.github.com/*"}
     for name in ("background.js", "popup.html", "options.html", "sync.js", "ui.css", "popup.js", "options.js"):
         assert (ROOT / "extension" / name).exists()
+
+
+def _synced_slabs(github):
+    snap = store.GitHubStore(REPO, TOKEN, api_url=github).load()
+    return drop_duplicate_serials(clean_slabs(snap.rows))
+
+
+def test_reads_the_page_the_way_a_server_sends_it(github, moraware):
+    """Different table id, upper-case tags, unquoted attributes, Windows-1252."""
+    result = run_sync(github, [f"{moraware}/raw?x=1"])
+    assert result["ok"] and result["slabs"] == 10 and result["pages"][0]["how"] == "direct"
+    direct = clean_slabs(parse_inventory_html(PAGE)[0])
+    synced = _synced_slabs(github)
+    for column in ("variant", "serial", "on_hand", "cost", "bin", "dimensions", "supplier"):
+        assert list(synced[column]) == list(direct[column]), column
+    assert "\u00d7" in synced["dimensions"].iloc[0]           # the size separator survived the character set
+
+
+def test_falls_back_to_the_page_as_the_browser_draws_it(github, moraware):
+    without = run_sync(github, [f"{moraware}/builtlater?x=1"])
+    assert not without["ok"] and "no inventory table" in without["message"]
+    result = run_sync(github, [f"{moraware}/builtlater?x=1"], render=True)
+    assert result["ok"] and result["slabs"] == 10 and result["pages"][0]["how"] == "tab"
+    assert len(_synced_slabs(github)) == 10
+
+
+def test_sign_in_seen_in_the_tab_is_reported_as_sign_in(github, moraware):
+    result = run_sync(github, [f"{moraware}/tabsignin?x=1"], render=True)
+    assert not result["ok"] and "Sign in to Moraware" in result["message"]
+    assert FakeGitHub.files == {}
+
+
+def test_unexpected_page_says_what_came_back(github, moraware):
+    result = run_sync(github, [f"{moraware}/other?x=1"], render=True)
+    assert not result["ok"]
+    message = result["message"]
+    assert "no inventory table" in message and 'page "Jobs - Moraware Systemize"' in message
+    assert "at /other" in message and "1 tables (Jobs)" in message and "headings missing" in message
+    assert "$" not in message                                  # the description never carries page content
