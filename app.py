@@ -89,18 +89,28 @@ def store_settings() -> tuple:
     return tuple(sorted({**{k: str(v) for k, v in settings.items()}, **env}.items()))
 
 
+# Streamlit keeps cached objects alive across a deploy, but swaps in fresh copies
+# of the code. `CODE_VERSION` changes with every fresh copy, so a store object built by
+# the old code is never reused by the new code.
+CODE_VERSION = id(store)
+
+
 @st.cache_resource(show_spinner=False)
-def inventory_store(settings: tuple):
+def inventory_store(settings: tuple, code: int):
     """Where Moraware inventory is kept: a GitHub repository when the
     [inventory_store] secrets are set, otherwise a folder on this server."""
     return store.from_settings({k: v for k, v in settings if not k.startswith("COUNTERPRO_")})
 
 
 @st.cache_data(ttl=config.CACHE_SECONDS, show_spinner="Loading slab inventory")
-def fetch(sources: tuple[str, ...], settings: tuple, upload_stamp: float):
+def fetch(sources: tuple[str, ...], settings: tuple, code: int, upload_stamp: float):
     """Inventory for everyone using the app. Inventory from Moraware wins over
-    the feed; `upload_stamp` changes when a new one is saved, which refreshes this."""
-    kept, errors, snapshot = inventory_store(settings), [], None
+    the feed; `upload_stamp` changes when a new one is saved, which refreshes this.
+
+    Everything returned is plain data (a table, text, dates, numbers). Streamlit
+    stores this result by copying it, and copying breaks for the app's own
+    classes after a deploy, so none of them are returned."""
+    kept, errors, snapshot = inventory_store(settings, code), [], None
     if upload_stamp:
         try:
             snapshot = kept.load()
@@ -114,7 +124,8 @@ def fetch(sources: tuple[str, ...], settings: tuple, upload_stamp: float):
     if snapshot is not None:
         try:
             slabs = drop_duplicate_serials(clean_slabs(snapshot.rows))
-            return slabs, errors, config.now(), snapshot, len(snapshot.rows) - len(slabs)
+            about = {"saved_at": snapshot.saved_at, "files": list(snapshot.files), "filters": dict(snapshot.filters)}
+            return slabs, errors, config.now(), about, len(snapshot.rows) - len(slabs)
         except Exception as exc:       # damaged inventory must not take the app down
             errors.append(f"Saved inventory could not be read: {exc}")
     result = load_slabs(sources)
@@ -153,7 +164,7 @@ ss.setdefault("shown", config.PAGE_SIZE)
 
 
 def add_sink():
-    sku = ss["sink_pick"].sku
+    sku = ss["sink_pick"]
     ss["sinks"][sku] = ss["sinks"].get(sku, 0) + 1
 
 
@@ -185,18 +196,18 @@ def reset_paging():
 
 
 # --- Sidebar: staff controls ------------------------------------------------
-CODE = staff_code()
+STAFF_CODE = staff_code()
 ss.setdefault("unlocked", False)
 ss.setdefault("upload_round", 0)
-unlocked = ss["unlocked"] or not CODE
+unlocked = ss["unlocked"] or not STAFF_CODE
 
 with st.sidebar:
     st.subheader("Staff")
-    if CODE and not ss["unlocked"]:
+    if STAFF_CODE and not ss["unlocked"]:
         with st.form("unlock", border=False):
             attempt = st.text_input("Staff code", type="password")
             if st.form_submit_button("Unlock", width="stretch"):
-                if hmac.compare_digest(attempt.strip().encode(), CODE.encode()):
+                if hmac.compare_digest(attempt.strip().encode(), STAFF_CODE.encode()):
                     ss["unlocked"] = True
                     st.rerun()
                 st.error("That code is not right.")
@@ -208,8 +219,8 @@ with st.sidebar:
         st.rerun()
 
 SETTINGS = store_settings()
-STORE = inventory_store(SETTINGS)
-slabs, load_errors, loaded_at, snapshot, left_out = fetch(config.data_sources(), SETTINGS, STORE.stamp())
+STORE = inventory_store(SETTINGS, CODE_VERSION)
+slabs, load_errors, loaded_at, snapshot, left_out = fetch(config.data_sources(), SETTINGS, CODE_VERSION, STORE.stamp())
 
 if slabs is None or slabs.empty:
     st.title(BRANDING.app_name)
@@ -240,9 +251,10 @@ def upload_panel():
     st.divider()
     st.subheader("Inventory source")
     if snapshot is not None:
-        age = config.now() - snapshot.saved_at
-        st.caption(f"Moraware inventory updated {snapshot.saved_at:%b} {snapshot.saved_at.day} at "
-                   f"{snapshot.saved_at:%H:%M}" + "".join(f". {k}: {v}" for k, v in snapshot.filters.items()
+        saved_at = snapshot["saved_at"]
+        age = config.now() - saved_at
+        st.caption(f"Moraware inventory updated {saved_at:%b} {saved_at.day} at "
+                   f"{saved_at:%H:%M}" + "".join(f". {k}: {v}" for k, v in snapshot["filters"].items()
                                                           if k in ("Product",) and v) + ".")
         if age > timedelta(days=config.UPLOAD_STALE_DAYS):
             st.warning(f"This inventory is {age.days} days old, so the daily sync has stopped. Slabs may have "
@@ -256,7 +268,7 @@ def upload_panel():
         st.caption("Uploads are kept on this server only and are lost when it restarts. "
                    "Add an [inventory_store] block to the app's secrets to keep them.")
 
-    if not CODE:
+    if not STAFF_CODE:
         st.caption("Updated by the sync extension. Uploading by hand is off because no staff code is set.")
         return
     if not ss["unlocked"]:
@@ -368,8 +380,10 @@ with main:
                        f"{(RULES.waste_factor - 1) * 100:.0f}% for cutting waste.")
 
         with st.container(horizontal=True, vertical_alignment="bottom"):
-            st.selectbox("Sinks", options=SINKS, key="sink_pick",
-                         format_func=lambda s: f"{s.category}: {s.label}, {money(s.price, cents=False)}")
+            # The choice is remembered as a SKU (plain text), not as a Sink object.
+            st.selectbox("Sinks", options=[s.sku for s in SINKS], key="sink_pick",
+                         format_func=lambda sku: (f"{SINKS_BY_SKU[sku].category}: {SINKS_BY_SKU[sku].label}, "
+                                                  f"{money(SINKS_BY_SKU[sku].price, cents=False)}"))
             st.button("Add sink", on_click=add_sink)
 
         for sku, qty in list(ss["sinks"].items()):

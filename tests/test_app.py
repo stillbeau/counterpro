@@ -259,3 +259,40 @@ def test_old_inventory_warns_that_the_sync_stopped(monkeypatch):
     at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
     assert not at.exception and "9 slab options" in text(at)
     assert any("5 days old" in w.value and "sync has stopped" in w.value for w in at.sidebar.warning)
+
+
+def test_survives_a_code_update_without_a_restart(monkeypatch):
+    """After a deploy Streamlit drops the changed modules and imports them fresh
+    while the app keeps running. Anything cached from before (the store object,
+    a remembered widget choice) then belongs to the old copy of the code and
+    must not break the next page load."""
+    import sys
+
+    import streamlit as st
+    from counterpro import store
+    from counterpro.moraware import parse_inventory_html
+    monkeypatch.delenv("COUNTERPRO_DATA_SOURCES", raising=False)
+    page = (Path(__file__).parent / "fixtures" / "moraware_inventory.html").read_text(encoding="utf-8")
+    rows, info = parse_inventory_html(page)
+    store.LocalStore().save(rows, ["inventory.html"], info["filters"])
+
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    assert not at.exception and "9 slab options" in text(at)
+    button(at, "Add sink").click().run()                   # a widget choice made before the deploy
+    before = {name: mod for name, mod in sys.modules.items() if name == "counterpro" or name.startswith("counterpro.")}
+    try:
+        for name in before:
+            del sys.modules[name]                          # the deploy: fresh copies on next import
+        st.cache_data.clear()                              # the 60-second inventory cache runs out
+        at.run()
+        assert not at.exception, at.exception
+        assert "9 slab options" in text(at)
+        button(at, "Add sink").click().run()
+        assert not at.exception, at.exception
+        assert sys.modules["counterpro.store"] is not before["counterpro.store"]   # really was a fresh copy
+    finally:
+        for name in [n for n in sys.modules if n == "counterpro" or n.startswith("counterpro.")]:
+            del sys.modules[name]
+        sys.modules.update(before)
+        st.cache_data.clear()
+        st.cache_resource.clear()
