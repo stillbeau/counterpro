@@ -151,12 +151,40 @@ class Branding:
     quote_prefix: str = "CP"
     quote_valid_days: int = 30
     max_quote_options: int = 4
-    terms: tuple[str, ...] = (
-        "Prices exclude installation site preparation.",
+    # Extra lines for the small print at the foot of the quote. Site preparation,
+    # which used to be the only line here, is now in the "Not included" list.
+    terms: tuple[str, ...] = ()
+    # Printed on the quote. Edit these to match what FloForm actually includes.
+    # Sinks are added to one list or the other by the quote itself, depending on
+    # whether the quote has any.
+    included: tuple[str, ...] = (
+        "Slab material",
+        "Fabrication",
+        "Installation",
+    )
+    excluded: tuple[str, ...] = (
+        "Installation site preparation",
+        "Anything not listed on this quote",
+    )
+    disclaimers: tuple[str, ...] = (
+        "This is an estimate based on the finished area shown. A different measured area changes the price.",
+        "Slabs shown are in stock at the time of this quote and can sell before an order is placed.",
     )
 
 
 BRANDING = Branding()
+
+# Slab photos. Moraware does not hold any, so cards show a lettered placeholder
+# until a photo is listed here (or the inventory feed gains an "Image URL" column).
+# Key: the name as shown on the card, brand then colour, e.g. "Caesarstone Blizzard".
+SLAB_PHOTOS: dict[str, str] = {}
+
+
+def photo_for(name: str, feed_url: str = "") -> str:
+    """Web address of a real photo of this slab colour, or '' when there is none."""
+    url = (feed_url or SLAB_PHOTOS.get(name, "") or "").strip()
+    return url if url.lower().startswith(("https://", "http://")) else ""
+
 
 SQFT_DEFAULT = 35.0
 SQFT_MAX = 500.0

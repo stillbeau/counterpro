@@ -23,8 +23,43 @@ streamlit run app.py
 | `counterpro/store.py` | Keeps the Moraware inventory (GitHub repository or local folder). |
 | `extension/` | Chrome extension that syncs Moraware inventory to the store each day. |
 | `counterpro/quote.py` | The quote PDF and CSV. |
+| `counterpro/ui.py` | The look: the stylesheet and the HTML for cards, rows, the comparison table. |
 | `app.py` | The screen. |
 | `.streamlit/config.toml` | Colours and fonts. |
+
+## The screen
+
+**Slabs and quote** has three parts:
+
+- **Project** at the top: finished area, the cutting allowance, the slab material that needs, and sinks.
+- **Find a material** on the left: search, location, thickness, brand, price range and sort. Filters in
+  use appear as chips that can be removed one at a time; **Reset filters** clears them all. Below that,
+  every material that can cover the project, as cards (**Grid**) or compact rows (**List**).
+- **Quote** on the right, which stays in view while the list scrolls: up to four materials, customer
+  details and the PDF. On a phone it sits below the list, with a bar at the bottom that jumps to it.
+
+**Compare** puts the materials on the quote side by side, with the difference from the lowest price.
+
+The headline figure everywhere is the **estimated installed price**: material, fabrication and
+installation for the finished area, before sinks and GST. The cards, the quote panel, the comparison
+and the PDF all read it from the same calculation (`price_job` in `counterpro/pricing.py`); none of
+them works a price out for itself.
+
+### Slab photos
+
+Moraware holds no photos, so each card shows a plain lettered tile marked "No photo yet". It is a
+placeholder and does not imitate the stone. To show real photos, either
+
+- list them in `SLAB_PHOTOS` in `counterpro/config.py`, keyed by the name on the card
+  (`"Caesarstone Blizzard": "https://..."`), or
+- add an **Image URL** column to the inventory feed.
+
+A photo then appears on the card, in the quote panel, in the comparison and on the PDF.
+
+### Quote wording
+
+The "Included in the price", "Not included" and estimate notes printed on the PDF are the `included`,
+`excluded` and `disclaimers` lists in `Branding` in `counterpro/config.py`. Change them there.
 
 ## IB calculator
 
@@ -39,7 +74,8 @@ what-if; that never changes the prices in the slab list.
 2. Internal base (IB) = the larger of (material + 5%, plus fabrication) and (raw cost / 0.82).
    With today's numbers the second is always larger, so IB is raw cost at an 18% margin.
 3. Customer material and fabrication = IB x 1.15.
-4. Add installation at $21/sq ft, add sinks, add 5% GST.
+4. Add installation at $21/sq ft. This is the **estimated installed price** shown on the cards.
+5. Add sinks, then 5% GST, for the total.
 
 Slab cost per sq ft is the total cost of a product's slabs divided by their total area.
 

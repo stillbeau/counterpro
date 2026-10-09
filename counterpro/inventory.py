@@ -146,7 +146,8 @@ def clean_slabs(raw: pd.DataFrame) -> pd.DataFrame:
         out["serial"] = ""
 
     # Extra detail the Moraware page carries and the old sheet did not.
-    for name, source in (("bin", "Location"), ("dimensions", "Measurement"), ("supplier", "Supplier")):
+    for name, source in (("bin", "Location"), ("dimensions", "Measurement"), ("supplier", "Supplier"),
+                         ("image", "Image URL")):
         out[name] = df[source].fillna("").astype(str).str.strip() if source in df.columns else ""
 
     # When the feed says when a slab arrived, the app can show the oldest stock first.
@@ -215,6 +216,7 @@ def summarize(slabs: pd.DataFrame) -> pd.DataFrame:
         tags=("tags", "first"),
         discontinued=("discontinued", "first"),
         received=("received", "min"),          # the oldest slab of this product
+        image=("image", lambda s: next((u for u in s if u), "")),
     ).reset_index()
     out["unit_cost"] = out["cost"] / out["on_hand"]
     out["name"] = (out["brand"] + " " + out["color"]).str.strip()

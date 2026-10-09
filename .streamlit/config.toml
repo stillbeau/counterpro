@@ -8,11 +8,12 @@ gatherUsageStats = false
 [theme]
 base = "light"
 primaryColor = "#17494D"
-backgroundColor = "#E7EAE8"
-secondaryBackgroundColor = "#F4F6F5"
-textColor = "#1C2526"
-borderColor = "#CBD2CF"
-baseRadius = "3px"
+backgroundColor = "#F3F5F4"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#14201F"
+borderColor = "#CCD4D0"
+showWidgetBorder = true
+baseRadius = "8px"
 font = "Barlow, sans-serif"
 headingFont = "'Barlow Condensed', Barlow, sans-serif"
 baseFontSize = 17

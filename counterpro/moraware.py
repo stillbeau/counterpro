@@ -24,6 +24,10 @@ COLUMN_MAP = {
     "on hand qty": "On Hand Qty",
     "allocated qty": "Allocated Qty",
     "available qty": "Available Qty",
+    "image url": "Image URL",
+    "image": "Image URL",
+    "photo": "Image URL",
+    "photo url": "Image URL",
 }
 NEEDED = ("Product Variant", "Serialized On Hand Cost")
 # Any other column whose heading looks like a date says how long a slab has been
