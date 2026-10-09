@@ -150,7 +150,7 @@ def test_staff_code_locks_cost_and_uploads(monkeypatch):
 
 
 def test_uploads_off_without_a_staff_code(app):
-    assert any("Uploads are off" in c.value for c in app.sidebar.caption)
+    assert any("Uploading by hand is off" in c.value for c in app.sidebar.caption)
 
 
 from tests.test_github_store import REPO, TOKEN, FakeGitHub, github  # noqa: E402,F401  (fixture)
@@ -231,3 +231,31 @@ def test_oldest_first_when_moraware_gives_dates(monkeypatch):
 
 def test_abbotsford_is_named(app):
     assert "Abbotsford" in text(app) and ", ABB." not in text(app)
+
+
+def test_no_google_sheet_is_read_any_more(monkeypatch):
+    from counterpro import config
+    monkeypatch.delenv("COUNTERPRO_DATA_SOURCES", raising=False)
+    assert config.data_sources() == ()
+    assert "docs.google.com" not in (ROOT / "counterpro" / "config.py").read_text()
+    assert "docs.google.com" not in (ROOT / "app.py").read_text()
+
+
+def test_empty_store_tells_staff_to_sync(monkeypatch):
+    monkeypatch.delenv("COUNTERPRO_DATA_SOURCES", raising=False)
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    assert not at.exception
+    assert "no slab inventory yet" in at.error[0].value and "Sync now" in at.error[0].value
+
+
+def test_old_inventory_warns_that_the_sync_stopped(monkeypatch):
+    from datetime import datetime, timedelta
+    from counterpro import config, store
+    from counterpro.moraware import parse_inventory_html
+    monkeypatch.delenv("COUNTERPRO_DATA_SOURCES", raising=False)
+    page = (Path(__file__).parent / "fixtures" / "moraware_inventory.html").read_text(encoding="utf-8")
+    rows, info = parse_inventory_html(page)
+    store.LocalStore().save(rows, ["inventory.html"], info["filters"], now=config.now() - timedelta(days=5))
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    assert not at.exception and "9 slab options" in text(at)
+    assert any("5 days old" in w.value and "sync has stopped" in w.value for w in at.sidebar.warning)

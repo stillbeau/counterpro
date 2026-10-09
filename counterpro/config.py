@@ -78,15 +78,17 @@ SINKS: tuple[Sink, ...] = (
 SINKS_BY_SKU = {s.sku: s for s in SINKS}
 
 
-# --- Inventory feed ---------------------------------------------------------
-_DEFAULT_SOURCES = (
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vSkoSeMuPGqr5-JEBhHO5l0fFYlkfmbMUW-VU8UZEpR0pd4lSeyK74WHE47m1zYMg/pub?output=csv",
-)
+# --- Inventory ---------------------------------------------------------------
+# Inventory comes from Moraware through the store (see counterpro/store.py).
+# The Google Sheet the app used to read has been retired. Extra CSV feeds can
+# still be listed here, or in COUNTERPRO_DATA_SOURCES; they are only read when
+# the store has no inventory in it.
+_DEFAULT_SOURCES: tuple[str, ...] = ()
 
 
 def data_sources() -> tuple[str, ...]:
-    """Feed URLs or file paths. Set COUNTERPRO_DATA_SOURCES (comma separated)
-    to point the app at a different sheet or a local CSV."""
+    """Extra feed URLs or file paths, used only when the store is empty. Set
+    COUNTERPRO_DATA_SOURCES (comma separated) to add a CSV or a saved Moraware page."""
     override = os.environ.get("COUNTERPRO_DATA_SOURCES", "").strip()
     if override:
         return tuple(s.strip() for s in override.split(",") if s.strip())
@@ -100,8 +102,8 @@ CACHE_SECONDS = 60
 # priced, so it is left out and counted in the staff sidebar.
 MIN_SLAB_SQFT = 1.0
 
-# An inventory uploaded from Moraware replaces the feed above until it is removed.
-# Staff are warned in the sidebar once it is older than this many days.
+# Staff are warned in the sidebar once the Moraware inventory is older than this
+# many days (the sync has stopped: Chrome closed, signed out, or the token expired).
 UPLOAD_STALE_DAYS = 3
 UPLOAD_MAX_MB = 5
 

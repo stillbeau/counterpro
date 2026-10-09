@@ -106,7 +106,7 @@ def fetch(sources: tuple[str, ...], settings: tuple, upload_stamp: float):
             snapshot = kept.load()
             kept.last_good = snapshot
         except store.StoreError as exc:
-            # A brief outage must not swap the list for the spreadsheet feed.
+            # A brief outage must not empty the list.
             snapshot = kept.last_good
             errors.append(f"Saved inventory: {exc}" + (" Showing the last copy that loaded." if snapshot else ""))
     else:
@@ -213,9 +213,12 @@ slabs, load_errors, loaded_at, snapshot, left_out = fetch(config.data_sources(),
 
 if slabs is None or slabs.empty:
     st.title(BRANDING.app_name)
-    st.error("The slab inventory could not be loaded, so nothing can be priced right now. "
-             "Check the connection, then choose Refresh inventory in the sidebar, "
-             "or upload a saved Moraware inventory page there.")
+    if load_errors:
+        st.error("The slab inventory could not be loaded, so nothing can be priced right now. "
+                 "Choose Refresh inventory in the sidebar to try again.")
+    else:
+        st.error("There is no slab inventory yet. On the computer with the CounterPro Inventory Sync "
+                 "extension, sign in to Moraware and press Sync now.")
     for err in load_errors:
         st.caption(err)
     st.stop()
@@ -242,9 +245,11 @@ def upload_panel():
                    f"{snapshot.saved_at:%H:%M}" + "".join(f". {k}: {v}" for k, v in snapshot.filters.items()
                                                           if k in ("Product",) and v) + ".")
         if age > timedelta(days=config.UPLOAD_STALE_DAYS):
-            st.warning(f"This inventory is {age.days} days old. Slabs may have sold since.")
+            st.warning(f"This inventory is {age.days} days old, so the daily sync has stopped. Slabs may have "
+                       "sold since. Open the sync extension on the work computer to see why.")
     else:
-        st.caption("Reading the spreadsheet feed.")
+        st.caption("No Moraware inventory has been synced yet." if not config.data_sources()
+                   else "No Moraware inventory yet; reading the extra feed.")
     if STORE.durable:
         st.caption(f"Inventory is kept {STORE.where}.")
     else:
@@ -252,7 +257,7 @@ def upload_panel():
                    "Add an [inventory_store] block to the app's secrets to keep them.")
 
     if not CODE:
-        st.caption("Uploads are off until a staff code is set (staff_code in the app's secrets).")
+        st.caption("Updated by the sync extension. Uploading by hand is off because no staff code is set.")
         return
     if not ss["unlocked"]:
         st.caption("Unlock with the staff code to upload inventory.")
@@ -304,7 +309,8 @@ def upload_panel():
                     ss["upload_round"] += 1
                     fetch.clear()
                     st.rerun()
-    if snapshot is not None and st.button("Go back to the spreadsheet feed", width="stretch"):
+    if snapshot is not None and st.button("Remove this inventory", width="stretch",
+                                          help="Clears the stored inventory. The list stays empty until the next sync or upload."):
         try:
             STORE.clear()
         except store.StoreError as exc:
@@ -319,7 +325,7 @@ with st.sidebar:
     st.caption(
         f"{report['slabs']} slabs across {report['products']} products"
         + ("." if snapshot is not None else
-           f", loaded {loaded_at:%H:%M}. Refreshes every {config.CACHE_SECONDS} seconds.")
+           f", loaded {loaded_at:%H:%M}.")
     )
     for code, count in sorted(report["by_location"].items()):
         st.caption(f"{location_name(code)}: {plural(count, 'slab')}")

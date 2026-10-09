@@ -72,8 +72,6 @@ private GitHub repository instead.
 3. In the Streamlit app's settings, under Secrets, add (see `.streamlit/secrets.toml.example`):
 
    ```toml
-   staff_code = "pick-a-code"
-
    [inventory_store]
    repo = "your-name/counterpro-data"
    token = "github_pat_..."
@@ -86,27 +84,28 @@ private GitHub repository instead.
 Without the `[inventory_store]` secrets the app keeps uploads in a `.counterpro/` folder beside it,
 which is fine on a machine you run yourself.
 
-### Fallback feed
+### Other sources
 
-Until the store has inventory in it, the app reads the published Google Sheet in
-`counterpro/config.py` (re-read every 60 seconds). Remove that address once the sync is running to
-drop the sheet completely. To point at a different CSV, or a saved Moraware page on disk:
+The Google Sheet the app used to read has been retired; nothing reads it now. If the store is ever
+empty, the app says so and asks for a sync. For testing, or to run from a file, point the app at a CSV
+or a saved Moraware page. These are read only when the store has no inventory:
 
 ```
 COUNTERPRO_DATA_SOURCES=/path/to/inventory.csv streamlit run app.py
 COUNTERPRO_DATA_SOURCES="/path/to/Inventory - Moraware Systemize.html" streamlit run app.py
 ```
 
-## Staff view
+Rows that Moraware lists as 1" x 1" with no cost are placeholders and are left out; the staff
+sidebar says how many.
 
-Set a staff code with the `COUNTERPRO_STAFF_CODE` environment variable (or `staff_code` in Streamlit
-secrets). In the sidebar, staff enter it to unlock:
+## Staff code (optional)
 
-- **Show cost and margin**: slab cost, IB and margin in the list and in slab details. These never
-  appear on the PDF or CSV.
-- **Update from Moraware**: replace the inventory.
+With no staff code, anyone with the link can use the whole app, including the **Show cost and
+margin** switch in the sidebar, and uploading inventory by hand is off (the sync extension keeps it
+current). Cost and margin never appear on the PDF or CSV either way.
 
-Without a staff code, cost and margin are open to anyone who opens the sidebar and uploads are off.
+To lock cost, margin and uploads behind a code, add `staff_code = "..."` to the app's secrets (or set
+the `COUNTERPRO_STAFF_CODE` environment variable). Staff then enter it in the sidebar.
 
 ## Tests
 
