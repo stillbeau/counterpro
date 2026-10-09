@@ -138,6 +138,7 @@ def new_quote():
     ss["quote"] = []
     ss["sinks"] = {}
     ss["quote_number"] = new_quote_number(config.now())
+    ss["show_ib"] = False               # the next customer starts with IB out of sight
     for key in ("customer_name", "customer_contact", "project"):
         ss[key] = ""
 
@@ -443,6 +444,10 @@ def start_replace(variant: str):
 
 def cancel_replace():
     ss["replacing"] = None
+
+
+def toggle_ib():
+    ss["show_ib"] = not ss.get("show_ib", False)
 
 
 def go_compare():
@@ -785,7 +790,18 @@ lowest = min(range(len(options)), key=lambda i: options[i].price.slab_subtotal) 
 
 with side:
     with st.container(key="panel_quote"):
-        st.subheader("Quote", anchor="quote")
+        # The eye shows each material's internal base (IB) in this panel only.
+        # It is never printed: the PDF and CSV have no IB in them.
+        show_ib = bool(ss.get("show_ib")) and unlocked
+        q_head = st.container(horizontal=True, vertical_alignment="center", horizontal_alignment="distribute")
+        q_head.subheader("Quote", anchor="quote")
+        q_head.button(
+            "Hide IB" if show_ib else "Show IB", key="ib_eye", on_click=toggle_ib, type="tertiary",
+            icon=":material/visibility_off:" if show_ib else ":material/visibility:", disabled=not unlocked,
+            help=("Unlock with the staff code in the sidebar to see IB." if not unlocked else
+                  "IB is the internal base: what the job costs FloForm before the customer markup and "
+                  "installation. Shown here for each material on the quote. It is never printed on the "
+                  "PDF or the spreadsheet."))
         st.caption(f"No. {ss['quote_number']}")
         if gone:
             st.warning(f"{plural(len(gone), 'material')} on this quote sold or left inventory and "
@@ -813,6 +829,8 @@ with side:
                 meta=", ".join(b for b in (opt.spec, opt.location) if b),
                 price=money(opt.price.slab_subtotal, cents=False),
                 sub=f"installed. {money(opt.price.total)} with {'sinks and ' if sink_lines else ''}GST",
+                staff_line=(f"IB {money(opt.price.ib_cost)}, {money(opt.price.ib_per_sqft)} per sq ft"
+                            if show_ib else ""),
             ), unsafe_allow_html=True)
             with c_act:
                 st.button("", icon=":material/swap_horiz:", key=f"swap_{variant}", on_click=start_replace,
@@ -861,6 +879,7 @@ with side:
             else:
                 # Nothing to lose: the quote is empty, so it only needs a fresh number.
                 ss["quote_number"] = new_quote_number(config.now())
+                ss["show_ib"] = False
                 ss["flash"] = "Started a new quote."
                 st.rerun()
 

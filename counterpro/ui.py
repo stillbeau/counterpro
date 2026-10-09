@@ -133,6 +133,8 @@ CSS = """
   .cp-qitem .cp-qmeta { color: var(--muted); font-size: .84rem; line-height: 1.35; }
   .cp-qitem .cp-qprice { font-family: var(--display); font-weight: 600; font-size: 1.3rem; line-height: 1.25; font-variant-numeric: tabular-nums; }
   .cp-qitem .cp-qsub { color: var(--muted); font-size: .8rem; line-height: 1.3; }
+  .cp-qitem .cp-qstaff { margin: .35rem 0 .7rem; padding: .22rem .5rem; background: var(--teal-50); border-radius: 6px;
+                         display: inline-block; font-variant-numeric: tabular-nums; }
   .cp-kv { display: flex; justify-content: space-between; gap: 12px; font-size: .92rem; padding: .18rem 0; }
   .cp-kv span:first-child { color: var(--muted); }
   .cp-kv span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
@@ -239,11 +241,14 @@ def total_block(label: str, amount: str) -> str:
     return f'<div class="cp-total"><span>{esc(label)}</span><b>{esc(amount)}</b></div>'
 
 
-def quote_item(*, photo_url: str, number: int, name: str, colour: str, meta: str, price: str, sub: str) -> str:
+def quote_item(*, photo_url: str, number: int, name: str, colour: str, meta: str, price: str, sub: str,
+               staff_line: str = "") -> str:
+    """One material on the quote. `staff_line` is the internal line (IB), shown only when asked for."""
+    staff = f'<div class="cp-staff cp-qstaff">{esc(staff_line)}</div>' if staff_line else ""
     return ('<div class="cp-qitem">' + media(photo_url, colour, "sm")
             + f'<div class="cp-qtext"><div class="cp-qname">{number}. {esc(name)}</div>'
             f'<div class="cp-qmeta">{esc(meta)}</div><div class="cp-qprice">{esc(price)}</div>'
-            f'<div class="cp-qsub">{esc(sub)}</div></div></div>')
+            f'<div class="cp-qsub">{esc(sub)}</div>{staff}</div></div>')
 
 
 def key_values(pairs: list[tuple[str, str]]) -> str:

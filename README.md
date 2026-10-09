@@ -63,6 +63,13 @@ A photo then appears on the card, in the quote panel, in the comparison and on t
 The "Included in the price", "Not included" and estimate notes printed on the PDF are the `included`,
 `excluded` and `disclaimers` lists in `Branding` in `counterpro/config.py`. Change them there.
 
+## IB on the quote
+
+**Show IB** (the eye at the top of the Quote panel) adds each material's internal base under its
+price: the IB for the project and per finished sq ft. It is hidden until pressed, goes back to
+hidden when a new quote is started, and is never printed on the PDF or the CSV. If a staff code is
+set, the eye is locked until the code is entered.
+
 ## IB calculator
 
 The **IB calculator** tab works out the internal base for any slab and job size. Pick a slab to use

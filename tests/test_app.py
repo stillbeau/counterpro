@@ -627,3 +627,80 @@ def test_quote_panel_lists_project_and_sinks(app):
     assert '<div class="cp-kv"><span>Sinks</span><span>$300.00</span></div>' in body
     assert "with sinks and GST" in body
     assert any(c.value == f"No. {app.session_state['quote_number']}" for c in app.caption)
+
+
+# --- IB on the quote --------------------------------------------------------
+def quote_panel(at):
+    return "\n".join(html.unescape(m.value) for m in at.markdown if 'class="cp-qitem"' in m.value)
+
+
+def test_ib_is_hidden_on_the_quote_until_the_eye_is_pressed(app, monkeypatch):
+    from counterpro import quote as quote_module
+    from tests.test_quote import pdf_text
+    seen = {}
+    real = quote_module.build_pdf
+
+    def spy(q, *args, **kwargs):
+        seen["quote"], seen["pdf"] = q, real(q, *args, **kwargs)
+        return seen["pdf"]
+    monkeypatch.setattr(quote_module, "build_pdf", spy)
+
+    for _ in range(2):
+        add_buttons(app)[0].click().run()
+    eye = app.button(key="ib_eye")
+    assert eye.label == "Show IB" and eye.icon == ":material/visibility:"
+    assert "IB" not in quote_panel(app) and "cp-qstaff" not in quote_panel(app)
+
+    eye.click().run()
+    assert app.button(key="ib_eye").label == "Hide IB"
+    panel = quote_panel(app)
+    for option in seen["quote"].options:
+        p = option.price
+        assert f"IB ${p.ib_cost:,.2f}, ${p.ib_per_sqft:,.2f} per sq ft" in panel
+        assert p.ib_cost == pytest.approx(max(p.ib_from_markup, p.ib_from_floor))   # the pricing module's own IB
+    assert panel.count("cp-qstaff") == 2
+    # still nothing internal on what the customer gets
+    pdf = pdf_text(seen["pdf"])
+    assert "IB" not in pdf and all(f"{o.price.ib_cost:,.2f}" not in pdf for o in seen["quote"].options)
+    # and the customer's prices did not move when IB was shown
+    assert [f"${o.price.slab_subtotal:,.0f}" for o in seen["quote"].options] == \
+        re.findall(r'cp-qprice">(.*?)</div>', panel)
+
+    app.button(key="ib_eye").click().run()
+    assert "IB" not in quote_panel(app) and app.button(key="ib_eye").label == "Show IB"
+
+
+def test_ib_follows_the_project_size_and_ignores_sinks(app):
+    add_buttons(app)[0].click().run()
+    app.button(key="ib_eye").click().run()
+    first = re.search(r"IB \$([\d,]+\.\d\d)", quote_panel(app)).group(1)
+    app.session_state["sinks"] = {"83742": 1}
+    app.run()
+    assert re.search(r"IB \$([\d,]+\.\d\d)", quote_panel(app)).group(1) == first      # sinks are not part of IB
+    app.number_input(key="sqft").set_value(50.0).run()
+    assert re.search(r"IB \$([\d,]+\.\d\d)", quote_panel(app)).group(1) != first
+
+
+def test_new_quote_hides_ib_again(app):
+    add_buttons(app)[0].click().run()
+    app.button(key="ib_eye").click().run()
+    assert app.session_state["show_ib"] is True
+    button(app, "Start a new quote").click().run()
+    button(app, "Clear and start new").click().run()
+    assert app.session_state["show_ib"] is False
+    add_buttons(app)[0].click().run()
+    assert "IB" not in quote_panel(app)
+
+
+def test_ib_eye_is_locked_with_the_rest_when_a_staff_code_is_set(monkeypatch):
+    monkeypatch.setenv("COUNTERPRO_DATA_SOURCES", str(FIXTURE))
+    monkeypatch.setenv("COUNTERPRO_STAFF_CODE", "slab-2026")
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    assert at.button(key="ib_eye").disabled
+    add_buttons(at)[0].click().run()
+    at.session_state["show_ib"] = True                 # even if the switch were somehow on
+    at.run()
+    assert "IB" not in quote_panel(at)
+    at.sidebar.text_input[0].set_value("slab-2026")
+    at.sidebar.button[0].click().run()
+    assert not at.button(key="ib_eye").disabled and "IB $" in quote_panel(at)
