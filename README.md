@@ -26,6 +26,13 @@ streamlit run app.py
 | `app.py` | The screen. |
 | `.streamlit/config.toml` | Colours and fonts. |
 
+## IB calculator
+
+The **IB calculator** tab works out the internal base for any slab and job size. Pick a slab to use
+its Moraware cost, or type in a cost per sq ft. It shows material, fabrication, raw cost, IB (and
+which rule set it), and what the customer pays on that IB. The rates can be changed there for a
+what-if; that never changes the prices in the slab list.
+
 ## How a price is built
 
 1. Raw cost = slab cost per sq ft x (finished sq ft x 1.20 waste) + $16/sq ft fabrication.

@@ -18,11 +18,29 @@ class Price:
     tax: float
     total: float
     # Internal
+    raw_material: float      # slab cost for the material needed, waste included
+    raw_fab: float           # fabrication at cost
     direct_cost: float       # raw material + raw fabrication
-    ib_cost: float
+    ib_from_markup: float    # IB if the material markup decided it
+    ib_from_floor: float     # IB if the minimum margin decided it
+    ib_cost: float           # the larger of the two
     slab_subtotal: float     # material_fab + install (no sinks)
     profit: float
     margin_pct: float
+
+    @property
+    def ib_rule(self) -> str:
+        """Which of the two IB rules set the price: 'floor' or 'markup'."""
+        return "floor" if self.ib_from_floor >= self.ib_from_markup else "markup"
+
+    @property
+    def ib_per_sqft(self) -> float:
+        return self.ib_cost / self.sqft if self.sqft else 0.0
+
+    @property
+    def ib_margin_pct(self) -> float:
+        """Margin inside IB: what is left of IB after raw material and fabrication."""
+        return (self.ib_cost - self.direct_cost) / self.ib_cost * 100 if self.ib_cost > 0 else 0.0
 
     @property
     def per_sqft(self) -> float:
@@ -72,7 +90,11 @@ def price_job(unit_cost: float, sqft: float, sinks_total: float = 0.0,
         subtotal=subtotal,
         tax=tax,
         total=subtotal + tax,
+        raw_material=raw_material,
+        raw_fab=raw_fab,
         direct_cost=direct_cost,
+        ib_from_markup=ib_from_markup,
+        ib_from_floor=ib_from_floor,
         ib_cost=ib_cost,
         slab_subtotal=slab_subtotal,
         profit=profit,

@@ -296,3 +296,52 @@ def test_survives_a_code_update_without_a_restart(monkeypatch):
         sys.modules.update(before)
         st.cache_data.clear()
         st.cache_resource.clear()
+
+
+def test_ib_calculator_with_a_typed_cost(app):
+    import html as html_lib
+    body = html_lib.unescape(text(app))
+    assert "IB for 35.0 sq ft" in body and "$1,707.32" in body            # (20 x 42 + 16 x 35) / 0.82
+    assert "Material: 42.0 sq ft at $20.00 (35.0 sq ft plus 20% waste)" in body
+    assert any("18% minimum margin" in c.value and "(18.0% of IB)" in c.value for c in app.caption)
+    app.number_input(key="ib_cost").set_value(30.0).run()
+    app.number_input(key="ib_sqft").set_value(50.0).run()
+    body = html_lib.unescape(text(app))
+    expected = (30 * 60 + 16 * 50) / 0.82
+    assert f"${expected:,.2f}" in body and "IB for 50.0 sq ft" in body
+    assert f"${expected * 1.15:,.2f}" in body                              # customer material and fabrication
+
+
+def test_ib_calculator_rates_can_be_changed(app):
+    import html as html_lib
+    app.number_input(key="ib_waste").set_value(5.0).run()
+    app.number_input(key="ib_fab").set_value(15.0).run()
+    app.number_input(key="ib_floor").set_value(0.0).run()
+    app.number_input(key="ib_markup").set_value(10.0).run()
+    body = html_lib.unescape(text(app))
+    expected = 20 * 35 * 1.05 * 1.10 + 15 * 35
+    assert f"${expected:,.2f}" in body
+    assert any("material markup plus fabrication" in c.value for c in app.caption)
+    # the calculator's rates never change the slab list's prices
+    assert "12 slab options for 35.0 sq ft" in body
+    assert app.session_state["budget_bounds"] == AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run().session_state["budget_bounds"]
+
+
+def test_ib_calculator_uses_a_picked_slabs_cost(app):
+    import html as html_lib
+    options = app.selectbox(key="ib_slab").options
+    assert options[0] == "Type in a cost myself" and any("Caesarstone Blizzard, 2cm, Vernon, $20.51/sq ft" == o for o in options)
+    # the test harness cannot pick from a list that shows custom labels, so set the choice directly
+    app.session_state["ib_slab"] = "15 - Caesarstone (VER) Blizzard #2141 2cm"
+    app.run()
+    assert not app.exception
+    body = html_lib.unescape(text(app))
+    unit = (1120.00 + 1222.67) / 114.2222
+    assert f"Slab cost ${unit:,.2f} per sq ft" in body.replace("\\$", "$")
+    assert f"${(unit * 42 + 560) / 0.82:,.2f}" in body
+
+
+def test_location_choices_show_how_many_options_fit(app):
+    assert app.pills(key="locations").options == ["Vernon (6)", "Abbotsford (6)"]
+    app.number_input(key="sqft").set_value(60.0).run()            # only two products can cover 72 sq ft
+    assert app.pills(key="locations").options == ["Vernon (1)", "Abbotsford (1)"]

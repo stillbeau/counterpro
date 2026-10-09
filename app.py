@@ -15,7 +15,7 @@ import pandas as pd
 import streamlit as st
 
 from counterpro import config, store
-from counterpro.config import BRANDING, RULES, SINKS, SINKS_BY_SKU
+from counterpro.config import BRANDING, RULES, SINKS, SINKS_BY_SKU, PricingRules
 from counterpro.inventory import (clean_slabs, drop_duplicate_serials, feed_report,
                                   load_slabs, location_name,
                                   slabs_for_job, summarize, thickness_value)
@@ -363,7 +363,8 @@ with st.container(horizontal=True, vertical_alignment="center"):
     st.title(f"{BRANDING.app_name} in-stock slabs", anchor=False)
 st.caption(f"{BRANDING.company}, {BRANDING.branch}. Enter the project size, pick slabs, and print a quote.")
 
-main, side = st.columns([7, 4], gap="large")
+tab_slabs, tab_ib = st.tabs(["Slabs and quote", "IB calculator"])
+main, side = tab_slabs.columns([7, 4], gap="large")
 
 # --- Project ----------------------------------------------------------------
 with main:
@@ -479,6 +480,7 @@ with main:
         f1, f2 = st.columns([3, 2])
         search = f1.text_input("Search", placeholder="Colour, brand or code", key="search",
                                on_change=reset_paging)
+        fit_by_location = fitting.groupby("location").size().to_dict()
         sort_options = ["Price, low to high", "Price, high to low", "Most in stock", "Name"]
         if has_dates:
             sort_options.insert(0, "Oldest stock first")
@@ -486,16 +488,20 @@ with main:
 
         locations = sorted(products["location"].unique(),
                            key=lambda c: (c != config.HOME_LOCATION, c))
-        f3, f4 = st.columns(2)
-        picked_locations = f3.pills("Location", locations, selection_mode="multi",
-                                    format_func=location_name, key="locations",
-                                    on_change=reset_paging) if len(locations) > 1 else []
+        # Each set of choices gets the full width, so a long row wraps instead of
+        # running into its neighbour.
+        picked_locations = st.pills(
+            "Location", locations, selection_mode="multi", key="locations", on_change=reset_paging,
+            format_func=lambda c: f"{location_name(c)} ({fit_by_location.get(c, 0)})",
+            help="Pick one or more. With none picked, every location is shown. "
+                 "The number is how many options fit this project.") if len(locations) > 1 else []
         thicknesses = sorted((t for t in products["thickness"].unique() if t),
                              key=thickness_value, reverse=True)
-        picked_thickness = f4.pills("Thickness", thicknesses, selection_mode="multi",
+        picked_thickness = st.pills("Thickness", thicknesses, selection_mode="multi",
                                     key="thickness", on_change=reset_paging)
-        picked_brands = st.multiselect("Brand", sorted(products["brand"].unique()), key="brands",
-                                       placeholder="All brands", on_change=reset_paging)
+        more = st.expander("Brand and budget")
+        picked_brands = more.multiselect("Brand", sorted(products["brand"].unique()), key="brands",
+                                         placeholder="All brands", on_change=reset_paging)
 
         # Budget range follows the project: bounds move with size and sinks.
         if len(fitting):
@@ -511,8 +517,8 @@ with main:
             a, b = max(lo, min(current[0], hi)), max(lo, min(current[1], hi))
             ss["budget"] = (a, b) if a < b else (lo, hi)
         ss["budget_bounds"] = (lo, hi)
-        budget_lo, budget_hi = st.slider("Budget, total with GST", min_value=lo, max_value=hi,
-                                         step=100, format="$%d", key="budget", on_change=reset_paging)
+        budget_lo, budget_hi = more.slider("Budget, total with GST", min_value=lo, max_value=hi,
+                                           step=100, format="$%d", key="budget", on_change=reset_paging)
 
     shown = fitting
     if picked_locations:
@@ -668,3 +674,99 @@ with side:
                       icon=":material/picture_as_pdf:", help="Add a slab to the quote first")
         st.button("Start a new quote", on_click=new_quote, width="stretch",
                   help="Clears the slabs, sinks and customer details")
+
+
+# --- IB calculator ----------------------------------------------------------
+def pct(value: float) -> str:
+    return f"{value:g}%"
+
+
+with tab_ib:
+    st.caption("Work out the internal base (IB) for a slab and a job size. Nothing here is saved or "
+               "added to a quote.")
+    ib_in, ib_out = st.columns([5, 6], gap="large")
+
+    with ib_in:
+        with st.container(border=True, key="panel_ib_in"):
+            st.subheader("Slab and job", anchor=False)
+            by_name = products.sort_values(["name", "thickness", "location"])
+            labels = {r.variant: (f"{r.name}, {r.spec}, {location_name(r.location)}, "
+                                  f"{money(r.unit_cost)}/sq ft") for r in by_name.itertuples()}
+            ib_pick = st.selectbox("Slab", [""] + list(labels), key="ib_slab",
+                                   format_func=lambda v: labels.get(v, "Type in a cost myself"),
+                                   help="Pick a slab to use its Moraware cost, or type in your own cost per sq ft.")
+            if ib_pick:
+                chosen = by_variant.loc[ib_pick]
+                ib_unit_cost = float(chosen["unit_cost"])
+                dims, area = largest_size.get(ib_pick, ("", 0.0))
+                st.markdown(md(f"**Slab cost {money(ib_unit_cost)} per sq ft**, from Moraware.  \n"
+                               f":gray[{plural(int(chosen['slab_count']), 'slab')} in stock"
+                               + (f", largest {dims} ({area:,.1f} sq ft)" if dims else "") + "]"))
+            else:
+                ib_unit_cost = st.number_input("Slab cost per sq ft ($)", min_value=0.0, max_value=500.0,
+                                               value=20.0, step=0.5, format="%.2f", key="ib_cost")
+            ib_sqft = st.number_input("Finished area (sq ft)", min_value=1.0, max_value=config.SQFT_MAX,
+                                      value=config.SQFT_DEFAULT, step=1.0, format="%.1f", key="ib_sqft")
+
+            with st.expander("Rates"):
+                st.caption("These start at the app's own rates. Changing them here only affects this calculator.")
+                r1, r2 = st.columns(2)
+                ib_waste = r1.number_input("Cutting waste (%)", 0.0, 100.0, round((RULES.waste_factor - 1) * 100, 2),
+                                           step=1.0, format="%g", key="ib_waste")
+                ib_fab = r2.number_input("Fabrication ($ per sq ft)", 0.0, 200.0, RULES.fabrication_per_sqft,
+                                         step=0.5, format="%.2f", key="ib_fab")
+                ib_markup = r1.number_input("IB markup on material (%)", 0.0, 200.0,
+                                            round((RULES.ib_material_markup - 1) * 100, 2),
+                                            step=1.0, format="%g", key="ib_markup")
+                ib_floor = r2.number_input("IB minimum margin (%)", 0.0, 90.0, round(RULES.ib_min_margin * 100, 2),
+                                           step=1.0, format="%g", key="ib_floor")
+                ib_cust = r1.number_input("Customer markup over IB (%)", 0.0, 300.0,
+                                          round((RULES.ib_to_customer_markup - 1) * 100, 2),
+                                          step=1.0, format="%g", key="ib_cust")
+                ib_install = r2.number_input("Installation ($ per sq ft)", 0.0, 200.0, RULES.install_per_sqft,
+                                             step=0.5, format="%.2f", key="ib_install")
+
+    ib_rules = PricingRules(
+        install_per_sqft=ib_install, fabrication_per_sqft=ib_fab, waste_factor=1 + ib_waste / 100,
+        tax_rate=RULES.tax_rate, ib_material_markup=1 + ib_markup / 100, ib_min_margin=ib_floor / 100,
+        ib_to_customer_markup=1 + ib_cust / 100, healthy_margin_pct=RULES.healthy_margin_pct)
+    ib = price_job(ib_unit_cost, ib_sqft, 0.0, rules=ib_rules)
+
+    with ib_out:
+        with st.container(border=True, key="panel_ib_out"):
+            st.subheader("Internal base", anchor=False)
+            cost_lines = [
+                (f"Material: {ib.material_sqft:,.1f} sq ft at {money(ib_unit_cost)} "
+                 f"({ib_sqft:,.1f} sq ft plus {pct(ib_waste)} waste)", ib.raw_material),
+                (f"Fabrication: {ib_sqft:,.1f} sq ft at {money(ib_fab)}", ib.raw_fab),
+                ("Raw cost", ib.direct_cost),
+            ]
+            st.markdown('<table class="cp-lines">' + "".join(
+                f"<tr><td>{esc(label)}</td><td>{money(value)}</td></tr>" for label, value in cost_lines)
+                + "</table>"
+                f'<div class="cp-total"><span>IB for {ib_sqft:,.1f} sq ft</span><b>{money(ib.ib_cost)}</b></div>',
+                unsafe_allow_html=True)
+            if ib.ib_rule == "floor":
+                why = (f"Set by the {pct(ib_floor)} minimum margin: raw cost divided by {1 - ib_floor / 100:g}. "
+                       f"The {pct(ib_markup)} material markup alone would give {money(ib.ib_from_markup)}.")
+            else:
+                why = (f"Set by the {pct(ib_markup)} material markup plus fabrication. "
+                       f"The {pct(ib_floor)} minimum margin alone would give {money(ib.ib_from_floor)}.")
+            st.caption(md(f"{money(ib.ib_per_sqft)} per finished sq ft. {why} "
+                          f"IB is {money(ib.ib_cost - ib.direct_cost)} over raw cost ({ib.ib_margin_pct:.1f}% of IB)."))
+
+            st.markdown("**What the customer pays on this IB**")
+            over_ib = ib.material_fab - ib.ib_cost
+            sell_lines = [
+                (f"Material and fabrication (IB plus {pct(ib_cust)})", ib.material_fab),
+                (f"Installation: {ib_sqft:,.1f} sq ft at {money(ib_install)}", ib.install),
+                ("Subtotal", ib.subtotal),
+                (f"GST ({RULES.tax_rate * 100:g}%)", ib.tax),
+                ("Total with GST", ib.total),
+            ]
+            st.markdown('<table class="cp-lines">' + "".join(
+                f"<tr><td>{esc(label)}</td><td>{money(value)}</td></tr>" for label, value in sell_lines)
+                + "</table>", unsafe_allow_html=True)
+            st.caption(md(f"Material and fabrication is {money(over_ib)} over IB. "
+                          f"{money(ib.per_sqft)} per sq ft installed, before GST."))
+

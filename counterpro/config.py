@@ -124,6 +124,9 @@ HOME_LOCATION = "VER"
 BRAND_ALIASES = {
     "Wilsonart Quartz": "Wilsonart",
     "Granite - Natural Stone": "Natural Stone",
+    "Viatera Quartz": "Viatera",
+    "Corian (Zodiaq)": "Corian Quartz",
+    "Corian (Zodiaq) Quartz": "Corian Quartz",
 }
 # Used only when a feed row has no "(VER)"-style location code to split on.
 KNOWN_BRANDS = (

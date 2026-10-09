@@ -79,3 +79,19 @@ def test_sinks_do_not_change_margin():
 def test_zero_sqft_is_safe():
     p = price_job(20, 0)
     assert p.total == 0 and p.margin_pct == 0 and p.per_sqft == 0
+
+
+def test_ib_parts_are_reported():
+    p = price_job(20.0, 35.0)
+    assert p.raw_material == pytest.approx(840.0) and p.raw_fab == pytest.approx(560.0)
+    assert p.ib_from_markup == pytest.approx(840 * 1.05 + 560)
+    assert p.ib_from_floor == pytest.approx(1400 / 0.82)
+    assert p.ib_rule == "floor" and p.ib_cost == p.ib_from_floor
+    assert p.ib_per_sqft == pytest.approx(1400 / 0.82 / 35)
+    assert p.ib_margin_pct == pytest.approx(18.0)
+
+
+def test_ib_rule_switches_when_the_markup_is_larger():
+    p = price_job(40.0, 35.0, rules=PricingRules(ib_material_markup=1.60, ib_min_margin=0.10))
+    assert p.ib_rule == "markup" and p.ib_cost == pytest.approx(40 * 42 * 1.6 + 560)
+    assert p.ib_margin_pct == pytest.approx((p.ib_cost - p.direct_cost) / p.ib_cost * 100)
