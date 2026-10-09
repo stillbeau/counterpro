@@ -1,0 +1,19 @@
+CounterPro Inventory Sync - how to install
+
+1. Unzip this folder somewhere it can stay (for example Documents).
+   Chrome reads the extension from this folder every time it starts,
+   so do not delete or move it afterwards.
+2. In Chrome open  chrome://extensions
+3. Turn on "Developer mode" (top right).
+4. Click "Load unpacked" and choose this folder
+   (the one that contains manifest.json).
+5. Click the extension's icon (puzzle piece, then "CounterPro Inventory
+   Sync"), then "Options".
+6. Paste the GitHub token and click "Save options".
+   The repository is already filled in: stillbeau/counterpro-data
+7. Make sure you are signed in to Moraware in this Chrome.
+8. Click the extension's icon and press "Sync now".
+   It should say "Sent N slabs" and list each Moraware view.
+
+After that it syncs by itself once a day while Chrome is open.
+If a sync fails, the icon shows a red "!" and the popup says why.

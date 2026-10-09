@@ -6,7 +6,7 @@ export const DEFAULTS = {
     "https://floformcountertops.moraware.net/sys/inventory?&view=14938",
     "https://floformcountertops.moraware.net/sys/inventory?&view=0&prod=F1017&sort=a0&cols=SN6,SN1,PN1,PN2,PN3,PN4,SN8,SN3,SN5,SN9,SN7&pageSize=9999&filter=1,&mrv=14938",
   ],
-  repo: "",
+  repo: "stillbeau/counterpro-data",
   token: "",
   path: "moraware_inventory.json",
   branch: "",
@@ -138,7 +138,8 @@ export async function pushToGitHub(settings, text, slabs, fetchImpl = fetch) {
 export async function runSync(settings, fetchImpl = fetch, now = new Date()) {
   const views = (settings.views || []).map((v) => v.trim()).filter(Boolean);
   if (!views.length) throw new SyncError("No Moraware views are set. Add at least one in the options.");
-  if (!settings.repo || !settings.token) throw new SyncError("The GitHub repository and token are not set. Add them in the options.");
+  if (!settings.repo) throw new SyncError("The GitHub repository is not set. Add it in the options.");
+  if (!settings.token) throw new SyncError("The GitHub token is not set. Paste it in the options.");
   const pages = [];
   for (const url of views) pages.push(await fetchView(url, fetchImpl));
   const slabs = pages.reduce((n, p) => n + p.slabs, 0);
