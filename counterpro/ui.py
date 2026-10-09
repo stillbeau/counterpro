@@ -4,7 +4,6 @@ to show, so cards, the comparison and the quote can never disagree."""
 from __future__ import annotations
 
 import html
-import re
 
 # Palette: white surfaces on a soft background, hairline borders, and the dark
 # teal as the one action colour. A light teal tint marks "selected" and "lowest".
@@ -63,15 +62,10 @@ CSS = """
   /* Slab photo, or a placeholder that cannot be mistaken for one */
   .cp-media { border-radius: 9px; overflow: hidden; background: var(--bg); position: relative; }
   .cp-media img { display: block; width: 100%; height: 100%; object-fit: cover; }
-  .cp-media.is-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-                       border: 1px dashed var(--line-strong); }
-  .cp-media.is-empty b { font-family: var(--display); font-weight: 600; color: #9AA7A4; letter-spacing: .02em; line-height: 1; }
-  .cp-media.is-empty span { color: #8B9895; font-size: .72rem; }
-  .cp-media.lg { height: 132px; } .cp-media.lg b { font-size: 2.3rem; }
-  .cp-media.md { height: 84px; width: 112px; } .cp-media.md b { font-size: 1.6rem; }
-  .cp-media.sm { height: 44px; width: 44px; flex: 0 0 44px; border-radius: 8px; } .cp-media.sm b { font-size: 1rem; }
+  .cp-media.lg { height: 132px; }
+  .cp-media.md { height: 84px; width: 112px; }
+  .cp-media.sm { height: 44px; width: 44px; flex: 0 0 44px; border-radius: 8px; }
   .cp-media.md { flex: 0 0 112px; }
-  .cp-media.sm span { display: none; }
 
   /* Slab cards */
   .st-key-grid { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 16px; align-items: stretch; }
@@ -89,6 +83,7 @@ CSS = """
 
   .cp-brand { color: var(--muted); font-size: .86rem; line-height: 1.2; margin-top: .65rem; }
   .cp-row .cp-brand { margin-top: 0; }
+  .cp-brand:first-child { margin-top: 0; }
   .cp-name { font-family: var(--display); font-weight: 600; font-size: 1.42rem; line-height: 1.12; color: var(--ink); margin-top: 1px; }
   .cp-tags { display: flex; flex-wrap: wrap; gap: 5px; margin: .45rem 0 .5rem; }
   .cp-tag { border: 1px solid var(--line-strong); border-radius: 999px; padding: 1px 9px; font-size: .78rem; line-height: 1.5; color: var(--ink); background: var(--surface); white-space: nowrap; }
@@ -182,23 +177,13 @@ def esc(value: object) -> str:
     return html.escape(str(value))
 
 
-def monogram(name: str) -> str:
-    """Two letters for the placeholder, from the colour name: 'Smokey White' -> 'SW'."""
-    words = [w for w in re.split(r"[^A-Za-z0-9]+", str(name)) if w and not w.isdigit()]
-    if not words:
-        return "?"
-    letters = (words[0][0] + (words[1][0] if len(words) > 1 else words[0][1:2])).upper()
-    return letters
-
-
 def media(photo_url: str, colour: str, size: str = "lg") -> str:
-    """A slab photo when there is one. Otherwise a plain lettered tile that says
-    there is no photo; it never stands in for what the slab looks like."""
-    if photo_url:
-        return (f'<div class="cp-media {size}"><img src="{esc(photo_url)}" alt="Photo of {esc(colour)}" '
-                f'loading="lazy"></div>')
-    return (f'<div class="cp-media {size} is-empty" role="img" aria-label="No photo of {esc(colour)} yet">'
-            f'<b>{esc(monogram(colour))}</b><span>No photo yet</span></div>')
+    """A slab photo when there is a real one, otherwise nothing at all: no
+    placeholder, and never a stand-in for what the slab looks like."""
+    if not photo_url:
+        return ""
+    return (f'<div class="cp-media {size}"><img src="{esc(photo_url)}" alt="Photo of {esc(colour)}" '
+            f'loading="lazy"></div>')
 
 
 def tags(items: list[tuple[str, str]]) -> str:

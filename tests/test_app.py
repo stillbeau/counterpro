@@ -411,9 +411,12 @@ def test_cards_show_what_the_brief_asks_for(app):
     assert labels.count("View details") == 12 and labels.count("Add to quote") == 12
 
 
-def test_no_photo_means_a_plain_placeholder_never_a_picture(app):
+def test_no_photo_means_no_picture_and_no_placeholder(app):
+    add_buttons(app)[0].click().run()
+    add_buttons(app)[0].click().run()                          # quote panel and comparison too
     body = text(app)
-    assert "No photo yet" in body and "<img" not in body       # the sample feed has no photos
+    assert "cp-media" not in body and "<img" not in body and "No photo" not in body
+    assert cards(app)[0].startswith('<div class="cp-brand">')  # the card opens with the name
 
 
 def test_a_real_photo_is_shown_when_the_feed_has_one(monkeypatch, tmp_path):
@@ -428,8 +431,7 @@ def test_a_real_photo_is_shown_when_the_feed_has_one(monkeypatch, tmp_path):
     assert not at.exception
     blizzard = next(c for c in cards(at) if ">Blizzard<" in c)
     assert '<img src="https://example.com/blizzard.jpg" alt="Photo of Blizzard"' in blizzard
-    assert "No photo yet" not in blizzard
-    assert sum("No photo yet" in c for c in cards(at)) == 11
+    assert sum("cp-media" in c for c in cards(at)) == 1          # the other eleven show no picture
 
 
 def test_grid_and_list_views_show_the_same_slabs_and_prices(app):

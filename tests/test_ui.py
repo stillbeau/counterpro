@@ -2,30 +2,19 @@
 from counterpro import config, ui
 
 
-def test_monogram():
-    assert ui.monogram("Smokey White") == "SW"
-    assert ui.monogram("Blizzard") == "BL"
-    assert ui.monogram("UHD-686/8K-66 - Ultra Bianco (R)") == "U8"      # first two words; bare numbers skipped
-    assert ui.monogram("5143") == "?" and ui.monogram("") == "?"
-
-
-def test_placeholder_is_plain_and_says_so():
-    tile = ui.media("", "Calacatta Nuvo")
-    assert "<img" not in tile and "No photo yet" in tile
-    assert 'aria-label="No photo of Calacatta Nuvo yet"' in tile
-    assert "background-image" not in tile and "gradient" not in tile     # nothing that imitates stone
+def test_no_photo_means_nothing_is_drawn():
+    assert ui.media("", "Calacatta Nuvo") == ""
+    card = ui.card(photo_url="", brand="Cambria", colour="Brittanicca", tag_items=[], fact_lines=[], staff_line="",
+                   price_label="Estimated installed price", price="$1,000", price_note="note")
+    assert "cp-media" not in card and "<img" not in card
+    assert "cp-media" not in ui.quote_item(photo_url="", number=1, name="Cambria Brittanicca", colour="Brittanicca",
+                                           meta="3cm", price="$1,000", sub="installed")
+    assert "No photo" not in ui.CSS and "is-empty" not in ui.CSS
 
 
 def test_real_photo_is_used_and_described():
     tile = ui.media("https://example.com/a.jpg", "Calacatta Nuvo", "sm")
     assert '<img src="https://example.com/a.jpg" alt="Photo of Calacatta Nuvo"' in tile
-    assert "No photo yet" not in tile
-
-
-def test_placeholder_style_does_not_imitate_a_slab():
-    start = ui.CSS.index(".cp-media.is-empty")
-    rule = ui.CSS[start:ui.CSS.index("}", start)]
-    assert "url(" not in rule and "gradient" not in rule
 
 
 def test_text_from_the_feed_is_escaped():

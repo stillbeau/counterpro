@@ -47,8 +47,10 @@ them works a price out for itself.
 
 ### Slab photos
 
-Moraware holds no photos, so each card shows a plain lettered tile marked "No photo yet". It is a
-placeholder and does not imitate the stone. To show real photos, either
+Moraware holds no photos, so the app shows none: no pictures and no placeholders. The slab details
+window has a button that opens a Google image search for the colour in a new tab.
+
+To show real photos of a colour, either
 
 - list them in `SLAB_PHOTOS` in `counterpro/config.py`, keyed by the name on the card
   (`"Caesarstone Blizzard": "https://..."`), or

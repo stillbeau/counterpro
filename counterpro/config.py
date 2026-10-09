@@ -174,8 +174,8 @@ class Branding:
 
 BRANDING = Branding()
 
-# Slab photos. Moraware does not hold any, so cards show a lettered placeholder
-# until a photo is listed here (or the inventory feed gains an "Image URL" column).
+# Slab photos. Moraware does not hold any, so the app shows none. A photo only
+# appears for a colour listed here (or when the inventory feed has an "Image URL" column).
 # Key: the name as shown on the card, brand then colour, e.g. "Caesarstone Blizzard".
 SLAB_PHOTOS: dict[str, str] = {}
 

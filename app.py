@@ -478,9 +478,14 @@ def confirm_new_quote():
 @st.dialog("Slab details", width="medium")
 def show_details(variant: str):
     row, price, used = by_variant.loc[variant], prices[variant], picks[variant] or []
-    top = st.columns([1, 2.4], vertical_alignment="center")
-    top[0].markdown(ui.media(photo_of(row), row["color"], "lg"), unsafe_allow_html=True)
-    top[1].markdown(
+    photo = photo_of(row)
+    if photo:
+        top = st.columns([1, 2.4], vertical_alignment="center")
+        top[0].markdown(ui.media(photo, row["color"], "lg"), unsafe_allow_html=True)
+        heading = top[1]
+    else:
+        heading = st
+    heading.markdown(
         f'<div class="cp-brand" style="margin-top:0">{esc(row["brand"])}</div>'
         f'<div class="cp-name">{esc(row["color"])}</div>'
         + ui.tags([(row["thickness"], ""), (row["finish"], ""), (location_name(row["location"]), "soft"),
