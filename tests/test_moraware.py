@@ -138,3 +138,44 @@ def test_local_store_reports_damage(tmp_path):
     (tmp_path / store.FILE_NAME).write_text("{not json", encoding="utf-8")
     with pytest.raises(store.StoreError, match="damaged"):
         store.LocalStore(tmp_path).load()
+
+
+def with_dates(page: str) -> str:
+    """The stand-in page with a Received Date column added, oldest slab last."""
+    dates = ["10/1/2026", "3/15/2024", "2024-03-20", "Jan 5, 2023", "", "6/30/2025", "7/1/2025", "11/2/2019", "5/5/2022", "not a date"]
+    out, rows = [], iter(dates)
+    for line in page.splitlines(keepends=True):
+        if line.startswith('<tr class="'):
+            line = line.replace("</tr>", f"<td>{next(rows)}</td></tr>")
+        out.append(line)
+    text = "".join(out)
+    head = '<td class="headerSortableCol" mjtclick="promptToSortPageWithUrl(event)">PO Number&nbsp;&nbsp;&nbsp;</td>'
+    assert head in text
+    return text.replace(head, head + '<td class="headerSortableCol">Received Date&nbsp;&nbsp;&nbsp;</td>')
+
+
+def test_received_date_column_gives_slab_age(page):
+    rows, _ = parse_inventory_html(with_dates(page))
+    assert "Received Date" in rows.columns
+    slabs = clean_slabs(rows)
+    by_serial = slabs.set_index("serial")["received"]
+    assert by_serial["29000 (VRN)"] == pd.Timestamp(2019, 11, 2)
+    assert by_serial["FG0000003 (VER)"] == pd.Timestamp(2023, 1, 5)
+    assert pd.isna(by_serial["S200"]) and pd.isna(by_serial["S301"])     # blank and unreadable dates
+    products = summarize(slabs).set_index("name")
+    assert products.loc["Cambria Sandgate", "received"] == pd.Timestamp(2024, 3, 15)   # oldest of its two slabs
+    oldest = summarize(slabs).sort_values("received", na_position="last")["name"].tolist()
+    assert oldest[0] == "Caesarstone Mont Blanc"
+
+
+@pytest.mark.parametrize("heading", ["Date Received", "Receipt Date", "Created", "Purchased Date", "received"])
+def test_other_date_headings_are_recognised(heading):
+    html = pd.DataFrame({"Product Variant": ["15 - Viatera (VER) Aura 3cm"], "Measurement": ['126" x 65"'],
+                         "Serialized On Hand Cost": ["$1,900.00"], heading: ["2/3/2021"]}).to_html(index=False)
+    assert clean_slabs(parse_inventory_html(html)[0])["received"].item() == pd.Timestamp(2021, 2, 3)
+
+
+def test_no_date_column_means_no_age(page):
+    slabs = clean_slabs(parse_inventory_html(page)[0])
+    assert slabs["received"].isna().all()
+    assert summarize(slabs)["received"].isna().all()

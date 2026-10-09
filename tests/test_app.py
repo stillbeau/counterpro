@@ -191,3 +191,43 @@ def test_app_survives_the_store_being_unreachable(monkeypatch):
     assert not at.exception
     assert "12 slab options for 35.0 sq ft" in text(at)          # falls back to the feed
     assert any("could not be reached" in w.value for w in at.sidebar.warning)
+
+
+def _save_page(html):
+    from counterpro import store
+    from counterpro.moraware import parse_inventory_html
+    rows, info = parse_inventory_html(html)
+    store.LocalStore().save(rows, ["inventory.html"], info["filters"])
+
+
+def test_rows_show_slab_size_and_staff_see_slab_cost(monkeypatch):
+    page = (Path(__file__).parent / "fixtures" / "moraware_inventory.html").read_text(encoding="utf-8")
+    _save_page(page)
+    monkeypatch.setenv("COUNTERPRO_DATA_SOURCES", str(FIXTURE))
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    import html
+    body = html.unescape(text(at))                             # the list is written as escaped HTML
+    assert '1 slab in stock, 128" × 63" (56.0 sq ft)' in body
+    assert "2 slabs in stock, largest 131.9999" in body
+    assert "In stock since" not in body                       # this page has no date column
+    assert "Oldest stock first" not in at.selectbox(key="sort").options
+    at.toggle(key="staff").set_value(True).run()
+    assert "Slab cost $1,400.00 ($25.00/sq ft)" in text(at)
+
+
+def test_oldest_first_when_moraware_gives_dates(monkeypatch):
+    from tests.test_moraware import with_dates
+    page = (Path(__file__).parent / "fixtures" / "moraware_inventory.html").read_text(encoding="utf-8")
+    _save_page(with_dates(page))
+    monkeypatch.setenv("COUNTERPRO_DATA_SOURCES", str(FIXTURE))
+    at = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
+    assert not at.exception
+    assert at.selectbox(key="sort").options[0] == "Oldest stock first"
+    assert at.selectbox(key="sort").value == "Oldest stock first"
+    names = [m.value for m in at.markdown if 'class="cp-name"' in m.value]
+    assert "Caesarstone Mont Blanc" in names[0] and "In stock since Nov 2019" in names[0]
+    assert "Natural Stone Titanium" in names[1] and "May 2022" in names[1]
+
+
+def test_abbotsford_is_named(app):
+    assert "Abbotsford" in text(app) and ", ABB." not in text(app)

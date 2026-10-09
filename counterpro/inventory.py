@@ -146,6 +146,14 @@ def clean_slabs(raw: pd.DataFrame) -> pd.DataFrame:
     for name, source in (("bin", "Location"), ("dimensions", "Measurement"), ("supplier", "Supplier")):
         out[name] = df[source].fillna("").astype(str).str.strip() if source in df.columns else ""
 
+    # When the feed says when a slab arrived, the app can show the oldest stock first.
+    if "Received Date" in df.columns:
+        out["received"] = pd.to_datetime(df["Received Date"].astype(str).str.strip().replace("", pd.NA),
+                                         errors="coerce", format="mixed")
+    else:
+        out["received"] = pd.NaT
+    out["received"] = pd.to_datetime(out["received"])
+
     out = out[(out["on_hand"] > 0) & out["cost"].notna()].reset_index(drop=True)
     parsed = out["variant"].map(parse_variant)
     for attr in ("brand", "color", "thickness", "finish", "location", "color_code"):
@@ -203,6 +211,7 @@ def summarize(slabs: pd.DataFrame) -> pd.DataFrame:
         color_code=("color_code", "first"),
         tags=("tags", "first"),
         discontinued=("discontinued", "first"),
+        received=("received", "min"),          # the oldest slab of this product
     ).reset_index()
     out["unit_cost"] = out["cost"] / out["on_hand"]
     out["name"] = (out["brand"] + " " + out["color"]).str.strip()

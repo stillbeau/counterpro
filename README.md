@@ -53,6 +53,10 @@ is sent and the previous inventory stays in place.
 Either way the view needs the `Product Variant`, `Serialized On Hand Cost` and `Measurement` columns;
 `Serial Number` and `Location` are used when present. Columns can be in any order.
 
+To find the oldest stock, add a date column to the Moraware view (any heading with "date" or
+"received" in it). The app then shows how long each slab has been in stock and adds an
+**Oldest stock first** sort.
+
 ### The store
 
 On Streamlit Community Cloud the app's disk is wiped on every restart, so the inventory is kept in a

@@ -26,6 +26,19 @@ COLUMN_MAP = {
     "available qty": "Available Qty",
 }
 NEEDED = ("Product Variant", "Serialized On Hand Cost")
+# Any other column whose heading looks like a date says how long a slab has been
+# in stock (for example "Received Date"). The first one found is used.
+_DATE_HEADING = re.compile(r"\b(received|receipt|receive|date|created|purchased)\b", re.IGNORECASE)
+
+
+def _map_headers(row: list[str]) -> list[str]:
+    headers, dated = [], False
+    for cell in row:
+        name = COLUMN_MAP.get(cell.lower())
+        if name is None and not dated and _DATE_HEADING.search(cell):
+            name, dated = "Received Date", True
+        headers.append(name or cell)
+    return headers
 _DIMENSIONS = re.compile(r"(\d+(?:\.\d+)?)\s*(?:\"|in\b|″)?\s*[x×]\s*(\d+(?:\.\d+)?)", re.IGNORECASE)
 
 
@@ -100,7 +113,7 @@ def parse_inventory_html(html: str) -> tuple[pd.DataFrame, dict]:
     best: tuple[list[str], list[list[str]]] | None = None
     for table in parser.tables:
         for i, row in enumerate(table["rows"]):
-            headers = [COLUMN_MAP.get(c.lower(), c) for c in row]
+            headers = _map_headers(row)
             if all(n in headers for n in NEEDED):
                 body = [r for r in table["rows"][i + 1:] if len(r) == len(row)]
                 if best is None or len(body) > len(best[1]):

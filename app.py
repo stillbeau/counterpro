@@ -222,7 +222,15 @@ if slabs is None or slabs.empty:
 
 products = summarize(slabs)
 slab_lists = {v: list(zip(g["serial"], g["available"])) for v, g in slabs.groupby("variant", sort=False)}
-slab_detail = {(r.variant, r.serial): (r.dimensions, r.bin) for r in slabs.itertuples()}
+slab_detail = {(r.variant, r.serial): (r.dimensions, r.bin, r.cost, r.received) for r in slabs.itertuples()}
+has_dates = bool(slabs["received"].notna().any())
+# Size of each product's largest slab, for the list.
+_largest = slabs.sort_values("available", ascending=False).drop_duplicates("variant").set_index("variant")
+largest_size = {v: (r.dimensions, r.available) for v, r in zip(_largest.index, _largest.itertuples())}
+
+
+def since(when) -> str:
+    return "" if pd.isna(when) else f"{when:%b %Y}"
 
 def upload_panel():
     """Staff replace the inventory with a page saved from Moraware."""
@@ -406,10 +414,13 @@ def show_details(variant: str):
     st.markdown(f"**In stock:** {plural(int(row['slab_count']), 'slab')}, "
                 f"{row['available']:,.1f} sq ft. This project uses {plural(len(used), 'slab')}.")
     used_serials = {p.serial for p in used}
+    blank = ("", "", float("nan"), pd.NaT)
     stock = pd.DataFrame([
         {"Serial": serial or "(none)", "Sq ft": round(area, 1),
-         "Size": slab_detail.get((variant, serial), ("", ""))[0],
-         "Yard location": slab_detail.get((variant, serial), ("", ""))[1],
+         "Size": slab_detail.get((variant, serial), blank)[0],
+         "Yard location": slab_detail.get((variant, serial), blank)[1],
+         "In stock since": since(slab_detail.get((variant, serial), blank)[3]),
+         "Slab cost": money(slab_detail.get((variant, serial), blank)[2]) if ss.get("staff") and unlocked else "",
          "For this project": "Yes" if serial in used_serials else ""}
         for serial, area in slab_lists[variant] if area > 0
     ])
@@ -445,8 +456,10 @@ with main:
         f1, f2 = st.columns([3, 2])
         search = f1.text_input("Search", placeholder="Colour, brand or code", key="search",
                                on_change=reset_paging)
-        sort_by = f2.selectbox("Sort by", ["Price, low to high", "Price, high to low",
-                                           "Most in stock", "Name"], key="sort")
+        sort_options = ["Price, low to high", "Price, high to low", "Most in stock", "Name"]
+        if has_dates:
+            sort_options.insert(0, "Oldest stock first")
+        sort_by = f2.selectbox("Sort by", sort_options, key="sort")
 
         locations = sorted(products["location"].unique(),
                            key=lambda c: (c != config.HOME_LOCATION, c))
@@ -491,7 +504,9 @@ with main:
                       | shown["name"].str.contains(term, case=False, regex=False, na=False)]
     shown = shown[(shown["total"] >= budget_lo) & (shown["total"] <= budget_hi)]
 
-    if sort_by == "Price, low to high":
+    if sort_by == "Oldest stock first":
+        shown = shown.sort_values(["received", "name"], na_position="last")
+    elif sort_by == "Price, low to high":
         shown = shown.sort_values(["total", "name"])
     elif sort_by == "Price, high to low":
         shown = shown.sort_values(["total", "name"], ascending=[False, True])
@@ -526,12 +541,19 @@ with main:
         with st.container(key=f"{'slabq' if in_quote else 'slab'}_{i}"):
             c_info, c_price = st.columns([5, 2], vertical_alignment="center")
             stock = f"{plural(int(row.slab_count), 'slab')} in stock"
+            dims, area = largest_size.get(row.variant, ("", 0.0))
+            size = f"{dims} ({area:,.1f} sq ft)" if dims else f"{area:,.1f} sq ft"
+            stock += f", {size}" if row.slab_count == 1 else f", largest {size}"
             if row.slabs_used > 1:
                 stock += f", this project uses {row.slabs_used}"
             meta = ", ".join(b for b in (row.spec, location_name(row.location)) if b)
             if row.discontinued:
                 meta += ". Discontinued colour"
-            staff_line = (f'<div class="cp-staff">Cost {money(row.unit_cost)}/sq ft, '
+            if since(row.received):
+                meta += f". In stock since {since(row.received)}"
+            cost_text = (f"Slab cost {money(row.cost)} ({money(row.unit_cost)}/sq ft)" if row.slab_count == 1
+                         else f"Cost {money(row.unit_cost)}/sq ft")
+            staff_line = (f'<div class="cp-staff">{cost_text}, '
                           f'margin {price.margin_pct:.1f}%</div>') if staff else ""
             c_info.markdown(f'<div class="cp-name">{esc(row.name)}</div>'
                             f'<div class="cp-meta">{esc(meta)}. {esc(stock)}.<br>'
