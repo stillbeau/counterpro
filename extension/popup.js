@@ -18,7 +18,7 @@ function show(status) {
     state.textContent = `Sent ${status.slabs} slabs on ${when(status.at)}.`;
     for (const page of status.pages || []) {
       const li = document.createElement("li");
-      li.textContent = `${page.name}: ${page.slabs}`;
+      li.textContent = `${page.location || page.name}: ${page.slabs} slabs`;
       pages.append(li);
     }
   } else {

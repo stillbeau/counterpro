@@ -1,11 +1,11 @@
-import { DEFAULTS, runSync } from "./sync.js";
+import { DEFAULTS, normalizeSettings, runSync } from "./sync.js";
 
 const ALARM = "counterpro-daily";
 const CATCH_UP_HOURS = 20;
 
 async function getSettings() {
   const { settings } = await chrome.storage.local.get("settings");
-  return { ...DEFAULTS, ...(settings || {}) };
+  return normalizeSettings(settings);
 }
 
 // Next time the clock reads the chosen time, then every 24 hours.

@@ -116,8 +116,8 @@ def staff_code() -> str:
 
 # The feed names each slab like "15 - Caesarstone (VER) Blizzard #2141 2cm".
 # The number is the branch, the code in brackets is the location.
-BRANCH_LOCATIONS = {"15": "VER", "17": "ABB"}
-LOCATION_NAMES = {"VER": "Vernon", "ABB": "Abbotsford"}   # shown to staff and customers
+BRANCH_LOCATIONS = {"15": "VER", "17": "ABB", "11": "EDM", "07": "SKTN", "7": "SKTN"}
+LOCATION_NAMES = {"VER": "Vernon", "ABB": "Abbotsford", "EDM": "Edmonton", "SKTN": "Saskatoon"}   # shown to staff and customers
 HOME_LOCATION = "VER"
 
 # Different spellings of the same supplier in the feed.

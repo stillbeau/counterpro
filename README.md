@@ -41,7 +41,9 @@ Slab cost per sq ft is the total cost of a product's slabs divided by their tota
 Inventory comes from Moraware. The app reads it from a small store, and there are two ways to fill it.
 
 **Automatic: the sync extension.** `extension/` is a Chrome extension for a computer that is signed in
-to Moraware. Once a day (and whenever you press **Sync now**) it opens the Moraware inventory views
+to Moraware. Its options have one block per location (Vernon, Abbotsford, Edmonton, Saskatoon), each
+with a tick box and the address of that location's Moraware inventory view; an unticked location is
+left out of CounterPro. Once a day (and whenever you press **Sync now**) it opens the ticked views
 with the sign-in already in that browser, keeps only the slab table, and saves it to the store. No
 Moraware password is stored anywhere. If Moraware is signed out, or a view comes back empty, nothing
 is sent and the previous inventory stays in place.

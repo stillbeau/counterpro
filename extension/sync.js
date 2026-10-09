@@ -1,10 +1,21 @@
 // Fetch the Moraware inventory views and send them to the CounterPro store.
 // No browser-extension APIs in this file, so it can be tested on its own.
 
+// One Moraware inventory view per location. `code` is how Moraware tags that
+// location's products, e.g. "15 - Stone & Quartz (VER)".
+export const LOCATIONS = [
+  { key: "vernon", name: "Vernon", code: "VER" },
+  { key: "abbotsford", name: "Abbotsford", code: "ABB" },
+  { key: "edmonton", name: "Edmonton", code: "EDM" },
+  { key: "saskatoon", name: "Saskatoon", code: "SKTN" },
+];
+
 export const DEFAULTS = {
-  views: [
-    "https://floformcountertops.moraware.net/sys/inventory?&view=14938",
-    "https://floformcountertops.moraware.net/sys/inventory?&view=0&prod=F1017&sort=a0&cols=SN6,SN1,PN1,PN2,PN3,PN4,SN8,SN3,SN5,SN9,SN7&pageSize=9999&filter=1,&mrv=14938",
+  locations: [
+    { key: "vernon", enabled: true, url: "https://floformcountertops.moraware.net/sys/inventory?&view=14938" },
+    { key: "abbotsford", enabled: true, url: "https://floformcountertops.moraware.net/sys/inventory?&view=0&prod=F1017&sort=a0&cols=SN6,SN1,PN1,PN2,PN3,PN4,SN8,SN3,SN5,SN9,SN7&pageSize=9999&filter=1,&mrv=14938" },
+    { key: "edmonton", enabled: false, url: "" },
+    { key: "saskatoon", enabled: false, url: "" },
   ],
   repo: "stillbeau/counterpro-data",
   token: "",
@@ -15,6 +26,45 @@ export const DEFAULTS = {
 };
 
 export class SyncError extends Error {}
+
+// Saved settings in the current shape: one entry per location, in a fixed order.
+// Versions before 1.2 kept a plain list of addresses; those are sorted into the
+// location they belong to (by the product code in the address) or, failing
+// that, into the next free location.
+export function normalizeSettings(saved) {
+  const s = { ...DEFAULTS, ...(saved || {}) };
+  const blank = () => LOCATIONS.map((l) => ({ ...l, enabled: false, url: "" }));
+  let locations;
+  if (saved && Array.isArray(saved.locations)) {
+    locations = LOCATIONS.map((l) => {
+      const found = saved.locations.find((x) => x && x.key === l.key) || {};
+      return { ...l, enabled: Boolean(found.enabled), url: String(found.url || "").trim() };
+    });
+  } else if (saved && Array.isArray(saved.views)) {
+    locations = blank();
+    const hints = { vernon: /prod=F1023\b|[?&]view=14938\b/i, abbotsford: /prod=F1017\b/i };
+    const unplaced = [];
+    for (const url of saved.views.map((v) => String(v).trim()).filter(Boolean)) {
+      const slot = locations.find((l) => !l.url && hints[l.key] && hints[l.key].test(url));
+      if (slot) { slot.url = url; slot.enabled = true; } else unplaced.push(url);
+    }
+    for (const url of unplaced) {
+      const slot = locations.find((l) => !l.url);
+      if (slot) { slot.url = url; slot.enabled = true; }
+    }
+  } else {
+    locations = LOCATIONS.map((l) => ({ ...l, ...DEFAULTS.locations.find((d) => d.key === l.key) }));
+  }
+  delete s.views;
+  s.locations = locations;
+  return s;
+}
+
+// Which location a Moraware page belongs to, from the code in its product name.
+export function locationOfPage(pageTitle) {
+  const hit = LOCATIONS.find((l) => new RegExp(`\\(\\s*${l.code}\\b`, "i").test(pageTitle || ""));
+  return hit ? hit.name : "";
+}
 
 const SIGNED_OUT = "Moraware asked for a sign-in. Sign in to Moraware in this Chrome profile, then sync again.";
 const COST_HEADING = /serialized on hand cost/gi;
@@ -154,7 +204,7 @@ export function buildDocument(pages, now = new Date()) {
     saved_at: localIso(now),
     source: "extension",
     files: pages.map((p) => p.name),
-    pages: pages.map(({ name, url, html }) => ({ name, url, html })),
+    pages: pages.map(({ name, location, url, html }) => ({ name, location: location || "", url, html })),
   });
 }
 
@@ -200,22 +250,30 @@ export async function pushToGitHub(settings, text, slabs, fetchImpl = fetch) {
   if (put.status !== 200 && put.status !== 201) throw new SyncError(explain(put.status, repo));
 }
 
-// All or nothing: if any view fails, the stored inventory is left as it was,
+// All or nothing: if any location fails, the stored inventory is left as it was,
 // so one bad page can never wipe a location's slabs from CounterPro.
-export async function runSync(settings, fetchImpl = fetch, now = new Date(), render = null) {
-  const views = (settings.views || []).map((v) => v.trim()).filter(Boolean);
-  if (!views.length) throw new SyncError("No Moraware views are set. Add at least one in the options.");
+// Locations that are switched off are not read, so their slabs leave CounterPro.
+export async function runSync(saved, fetchImpl = fetch, now = new Date(), render = null) {
+  const settings = normalizeSettings(saved);
+  const active = settings.locations.filter((l) => l.enabled);
+  if (!active.length) throw new SyncError("No locations are switched on. Switch on at least one in the options.");
+  const missing = active.find((l) => !l.url);
+  if (missing) throw new SyncError(`${missing.name} is switched on but has no Moraware address. Add it in the options, or switch ${missing.name} off.`);
   if (!settings.repo) throw new SyncError("The GitHub repository is not set. Add it in the options.");
   if (!settings.token) throw new SyncError("The GitHub token is not set. Paste it in the options.");
   const pages = [];
-  for (const [i, url] of views.entries()) {
+  for (const place of active) {
     try {
-      pages.push(await fetchView(url, fetchImpl, render));
+      pages.push({ ...(await fetchView(place.url, fetchImpl, render)), location: place.name });
     } catch (err) {
-      throw new SyncError(`View ${i + 1} of ${views.length}: ${err.message}`);
+      throw new SyncError(`${place.name}: ${err.message}`);
     }
   }
   const slabs = pages.reduce((n, p) => n + p.slabs, 0);
   await pushToGitHub(settings, buildDocument(pages, now), slabs, fetchImpl);
-  return { slabs, savedAt: localIso(now), pages: pages.map(({ name, slabs, how }) => ({ name, slabs, how })) };
+  return {
+    slabs,
+    savedAt: localIso(now),
+    pages: pages.map(({ location, name, slabs, how }) => ({ location, name, slabs, how, holds: locationOfPage(name) })),
+  };
 }

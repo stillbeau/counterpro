@@ -91,8 +91,12 @@ def moraware():
     server.shutdown()
 
 
-def run_sync(github, views, token=TOKEN, repo=REPO, render=False):
-    settings = {"views": views, "repo": repo, "token": token, "apiUrl": github, "path": store.FILE_NAME}
+def run_sync(github, views=None, token=TOKEN, repo=REPO, render=False, locations=None):
+    settings = {"repo": repo, "token": token, "apiUrl": github, "path": store.FILE_NAME}
+    if locations is not None:
+        settings["locations"] = locations          # the current settings shape
+    else:
+        settings["views"] = views                  # the shape used before version 1.2
     if render:
         settings["renderSuffix"] = "&rendered=1"
     out = subprocess.run(["node", str(ROOT / "tests" / "ext_sync_runner.mjs"), json.dumps(settings)],
@@ -137,7 +141,7 @@ def test_signed_out_sends_nothing_and_keeps_the_old_inventory(github, moraware):
     before = dict(FakeGitHub.files)
     result = run_sync(github, [f"{moraware}/sys/inventory?&view=1", f"{moraware}/signedout"])
     assert not result["ok"] and "Sign in to Moraware" in result["message"]
-    assert result["message"].startswith("View 2 of 2:")        # says which view failed
+    assert result["message"].startswith("Abbotsford:")         # says which location failed
     assert FakeGitHub.files == before
 
 
@@ -160,7 +164,7 @@ def test_bad_token_is_reported(github, moraware):
 
 def test_missing_settings_are_reported(github, moraware):
     assert "token is not set" in run_sync(github, [f"{moraware}/sys/inventory?&view=1"], token="")["message"]
-    assert "No Moraware views" in run_sync(github, [])["message"]
+    assert "No locations are switched on" in run_sync(github, [])["message"]
 
 
 def test_manifest_is_valid_and_narrow():
@@ -209,3 +213,68 @@ def test_unexpected_page_says_what_came_back(github, moraware):
     assert "no inventory table" in message and 'page "Jobs - Moraware Systemize"' in message
     assert "at /other" in message and "1 tables (Jobs)" in message and "headings missing" in message
     assert "$" not in message                                  # the description never carries page content
+
+
+def place(key, url, enabled=True):
+    return {"key": key, "enabled": enabled, "url": url}
+
+
+def test_each_location_has_its_own_switch_and_address(github, moraware):
+    result = run_sync(github, locations=[
+        place("vernon", f"{moraware}/sys/inventory?&view=1"),
+        place("abbotsford", f"{moraware}/sys/inventory?&view=2", enabled=False),
+        place("edmonton", "", enabled=False),
+        place("saskatoon", "", enabled=False),
+    ])
+    assert result["ok"] and result["slabs"] == 10
+    assert [(p["location"], p["slabs"], p["holds"]) for p in result["pages"]] == [("Vernon", 10, "Vernon")]
+    assert not any("view=2" in path for path in FakeMoraware.seen)      # a switched-off location is not read
+    assert set(_synced_slabs(github)["location"]) == {"VER"}
+
+
+def test_switching_a_location_on_adds_it(github, moraware):
+    result = run_sync(github, locations=[place("vernon", f"{moraware}/sys/inventory?&view=1"),
+                                         place("abbotsford", f"{moraware}/sys/inventory?&view=2")])
+    assert [(p["location"], p["holds"]) for p in result["pages"]] == [("Vernon", "Vernon"), ("Abbotsford", "Abbotsford")]
+    assert set(_synced_slabs(github)["location"]) == {"VER", "ABB"}
+
+
+def test_wrong_address_in_a_slot_is_noticed(github, moraware):
+    result = run_sync(github, locations=[place("edmonton", f"{moraware}/sys/inventory?&view=2")])
+    assert result["ok"]
+    assert result["pages"][0]["location"] == "Edmonton" and result["pages"][0]["holds"] == "Abbotsford"
+
+
+def test_location_switched_on_without_an_address(github, moraware):
+    result = run_sync(github, locations=[place("vernon", f"{moraware}/sys/inventory?&view=1"), place("saskatoon", "")])
+    assert not result["ok"] and "Saskatoon is switched on but has no Moraware address" in result["message"]
+    assert FakeGitHub.files == {}
+
+
+def test_all_locations_off(github, moraware):
+    result = run_sync(github, locations=[place("vernon", f"{moraware}/sys/inventory?&view=1", enabled=False)])
+    assert not result["ok"] and "No locations are switched on" in result["message"]
+
+
+def test_old_address_list_is_sorted_into_locations():
+    """Settings saved by versions before 1.2 are carried over, each address in its own location."""
+    script = """
+import { normalizeSettings } from "./extension/sync.js";
+const base = "https://floformcountertops.moraware.net/sys/inventory?&view=0&sort=a0&pageSize=9999&mrv=14938&prod=";
+const out = [
+  normalizeSettings({ views: [base + "F1017", base + "F1023"], token: "t", time: "07:15" }),
+  normalizeSettings({ views: ["https://floformcountertops.moraware.net/sys/inventory?&view=14938", base + "F1017"] }),
+  normalizeSettings({ views: [base + "F9999"] }),
+  normalizeSettings(undefined),
+].map((s) => ({ time: s.time, token: s.token, hasViews: "views" in s,
+                places: s.locations.map((l) => [l.name, l.enabled, (l.url.match(/prod=(\\w+)|view=(14938)/) || []).slice(1).find(Boolean) || ""]) }));
+console.log(JSON.stringify(out));
+"""
+    out = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60, cwd=ROOT)
+    assert out.returncode == 0, out.stderr
+    swapped, saved_view, unknown, fresh = json.loads(out.stdout)
+    assert swapped["places"] == [["Vernon", True, "F1023"], ["Abbotsford", True, "F1017"], ["Edmonton", False, ""], ["Saskatoon", False, ""]]
+    assert swapped["token"] == "t" and swapped["time"] == "07:15" and swapped["hasViews"] is False
+    assert saved_view["places"][:2] == [["Vernon", True, "14938"], ["Abbotsford", True, "F1017"]]
+    assert unknown["places"][0] == ["Vernon", True, "F9999"]              # no clue in the address: next free location
+    assert [p[:2] for p in fresh["places"]] == [["Vernon", True], ["Abbotsford", True], ["Edmonton", False], ["Saskatoon", False]]

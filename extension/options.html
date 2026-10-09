@@ -7,22 +7,25 @@
 </head>
 <body class="options">
   <h1>CounterPro Inventory Sync</h1>
-  <p>Once a day this reads the Moraware inventory views below, using the Moraware sign-in already in this browser, and saves the slab list where CounterPro reads it. No Moraware password is stored.</p>
-  <form id="form">
-    <label for="views">Moraware inventory views, one address per line</label>
-    <textarea id="views" rows="5" spellcheck="false" required></textarea>
+  <p>Once a day this reads the Moraware inventory view for each location that is switched on, using the Moraware sign-in already in this browser, and saves the slab list where CounterPro reads it. No Moraware password is stored.</p>
+  <form id="form" novalidate>
+    <h2>Locations</h2>
+    <p class="small">Tick a location to include it and paste the address of its Moraware inventory view. A location that is not ticked is left out of CounterPro at the next sync.</p>
+    <div id="places"></div>
 
-    <label for="repo">GitHub repository for the inventory (owner/name)</label>
-    <input id="repo" type="text" placeholder="stillbeau/counterpro-data" autocomplete="off" required>
+    <h2>Where the inventory is saved</h2>
+    <label for="repo">GitHub repository (owner/name)</label>
+    <input id="repo" type="text" placeholder="stillbeau/counterpro-data" autocomplete="off">
 
     <label for="token">GitHub token with Contents read and write on that repository only</label>
-    <input id="token" type="password" autocomplete="off" required>
+    <input id="token" type="password" autocomplete="off">
 
+    <h2>Schedule</h2>
     <label for="time">Sync every day at</label>
-    <input id="time" type="time" required>
+    <input id="time" type="time">
 
     <button type="submit">Save options</button>
-    <span id="saved" role="status"></span>
+    <p id="saved" role="status"></p>
   </form>
   <p class="small">The token is kept in this browser's extension storage on this computer. Chrome has to be open at the sync time; if it was closed, the sync runs the next time Chrome starts.</p>
   <script type="module" src="options.js"></script>

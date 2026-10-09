@@ -25,6 +25,11 @@ from counterpro.inventory import (clean_slabs, load_slabs, parse_variant,
     ("15 - Granite - Natural Stone (VER) Andino White 3cm Polished", "Natural Stone", "Andino White", "3cm", "Polished", "VER"),
     ("15 - GS Granite Alaska Bianca 3cm Polished", "GS Granite", "Alaska Bianca", "3cm", "Polished", "VER"),
     ("15 - Silestone (VER) Eternal Calacatta Gold (EX) 1.2cm", "Silestone", "Eternal Calacatta Gold", "1.2cm", "", "VER"),
+    ("11 - Caesarstone (EDM) Blizzard #2141 1.3cm", "Caesarstone", "Blizzard", "1.3cm", "", "EDM"),
+    ("07 - Cimstone (SKTN Fresh Linens 2cm", "Cimstone", "Fresh Linens", "2cm", "", "SKTN"),
+    ("07 - Cimstone (SKTN) Fresh Linens 2cm", "Cimstone", "Fresh Linens", "2cm", "", "SKTN"),
+    ("11 - GS Granite Alaska Bianca 3cm Polished", "GS Granite", "Alaska Bianca", "3cm", "Polished", "EDM"),
+    ("15 - Cambria (VER) Portrush (EX) 2cm Polished", "Cambria", "Portrush", "2cm", "Polished", "VER"),
 ])
 def test_parse_variant(raw, brand, color, thickness, finish, location):
     v = parse_variant(raw)
@@ -106,3 +111,9 @@ def test_allocated_slab_is_not_offered(slabs):
     picks = picks_for_variant(slabs, variant, 100)
     assert {p.serial for p in picks} == {"T2001", "T2003"}
     assert picks_for_variant(slabs, variant, 130) is None    # 180 on hand, only 120 free
+
+
+
+def test_all_four_locations_have_names():
+    from counterpro.inventory import location_name
+    assert [location_name(c) for c in ("VER", "ABB", "EDM", "SKTN")] == ["Vernon", "Abbotsford", "Edmonton", "Saskatoon"]

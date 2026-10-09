@@ -15,7 +15,10 @@ REQUIRED_COLUMNS = ("Product Variant", "On Hand Qty", "Serialized On Hand Cost")
 SERIAL_COLUMNS = ("Serial Number", "SKU", "Item Code", "Product SKU", "Serialized Inventory")
 
 _BRANCH = re.compile(r"^\s*(\d+)\s*-\s*")
-_LOCATION = re.compile(r"\(\s*([A-Z]{3})\s*\)")
+# "(VER)" after the brand. Known codes are also accepted without the closing
+# bracket, which is how some Saskatoon products are written ("Cimstone (SKTN Fresh Linens").
+_KNOWN_CODES = "|".join(sorted(LOCATION_NAMES, key=len, reverse=True))
+_LOCATION = re.compile(rf"\(\s*(?:({_KNOWN_CODES})\b\s*\)?|([A-Z]{{3}})\s*\))")
 _PAREN = re.compile(r"\(\s*([^)]*?)\s*\)")
 _THICKNESS = re.compile(r"(\d+(?:\.\d+)?)\s*cm\b", re.IGNORECASE)
 _COLOR_CODE = re.compile(r"#\s*(\w+)")
@@ -58,7 +61,7 @@ def parse_variant(raw: object) -> Variant:
     loc = _LOCATION.search(text)
     if loc:
         brand, rest = text[:loc.start()].strip(), text[loc.end():]
-        location = loc.group(1)
+        location = loc.group(1) or loc.group(2)
     else:
         location = BRANCH_LOCATIONS.get(branch, "")
         brand = next((b for b in sorted(KNOWN_BRANDS, key=len, reverse=True)

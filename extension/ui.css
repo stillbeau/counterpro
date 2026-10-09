@@ -1,19 +1,30 @@
-:root { --ink:#1C2526; --muted:#5E6B6C; --rule:#CBD2CF; --slate:#17494D; --stone:#E7EAE8; }
+:root { --ink:#1C2526; --muted:#5E6B6C; --rule:#CBD2CF; --slate:#17494D; --stone:#E7EAE8; --panel:#F4F6F5; }
 * { box-sizing: border-box; }
 body { margin: 0; font: 15px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: #fff; }
 body.popup { width: 320px; padding: 14px 16px; }
-body.options { max-width: 640px; padding: 28px 24px; margin: 0 auto; }
+body.options { max-width: 680px; padding: 28px 24px; margin: 0 auto; }
 h1 { font-size: 1.15rem; margin: 0 0 8px; }
+h2 { font-size: 1rem; margin: 28px 0 4px; }
 p { margin: 0 0 10px; }
 ul { margin: 0 0 12px; padding-left: 18px; color: var(--muted); }
-.small { font-size: 0.85rem; color: var(--muted); margin-top: 12px; }
-.problem { color: #8C1D18; }
+.small { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+.problem, .small.problem { color: #8C1D18; }
 label { display: block; font-weight: 600; margin: 16px 0 4px; }
-input, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; color: inherit; }
-textarea { font-size: 0.8rem; font-family: ui-monospace, Consolas, monospace; white-space: pre; overflow-x: auto; }
+input, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; color: inherit; background: #fff; }
+input[type="url"] { font-size: 0.82rem; font-family: ui-monospace, Consolas, monospace; }
 input[type="time"] { width: auto; }
-button { margin-top: 16px; padding: 9px 16px; border: 0; border-radius: 3px; background: var(--slate); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+input[type="checkbox"] { width: 18px; height: 18px; margin: 0 8px 0 0; padding: 0; accent-color: var(--slate); vertical-align: -3px; }
+
+/* One block per location */
+.place { border: 1px solid var(--rule); border-left: 5px solid var(--rule); border-radius: 3px; background: var(--panel); margin: 10px 0 0; padding: 12px 14px 8px; min-width: 0; }
+.place:has(input[type="checkbox"]:checked) { border-left-color: var(--slate); background: #fff; }
+.place .tick { margin: 0 0 8px; font-size: 1.02rem; cursor: pointer; }
+.place .quiet { font-weight: 400; font-size: 0.85rem; color: var(--muted); margin: 0 0 4px; }
+.place .small:empty { display: none; }
+
+button { margin-top: 20px; padding: 9px 16px; border: 0; border-radius: 3px; background: var(--slate); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 form button { display: block; }
 button:disabled { opacity: 0.6; cursor: default; }
+#saved { margin-top: 10px; min-height: 1.4em; }
 :focus-visible { outline: 2px solid var(--slate); outline-offset: 2px; }
 a { color: var(--slate); }

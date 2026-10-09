@@ -9,7 +9,11 @@ CounterPro Inventory Sync - how to install
    (the one that contains manifest.json).
 5. Click the extension's icon (puzzle piece, then "CounterPro Inventory
    Sync"), then "Options".
-6. Paste the GitHub token and click "Save options".
+6. Under "Locations", tick each location you want in CounterPro and
+   paste the address of its Moraware inventory view. Vernon and
+   Abbotsford are filled in already. Leave a location unticked to keep
+   it out of CounterPro; its address stays saved for later.
+   Then paste the GitHub token and click "Save options".
    The repository is already filled in: stillbeau/counterpro-data
 7. Make sure you are signed in to Moraware in this Chrome.
 8. Click the extension's icon and press "Sync now".
